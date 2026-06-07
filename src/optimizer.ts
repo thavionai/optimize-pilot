@@ -65,10 +65,20 @@ const POLITENESS: ReadonlyArray<RegExp> = [
 // Request preambles — only stripped at the start of a line or sentence so we
 // never mangle a genuine mid-sentence question like "how can you tell".
 // The leading boundary is captured and re-emitted via `$1`.
-const PREAMBLES: ReadonlyArray<RegExp> = [
-	/(^|[\n.!?]\s*)i (?:was )?wondering if you (?:could|can|would) /gi,
-	/(^|[\n.!?]\s*)i(?:'d| would)? (?:like|want)(?: you)? to /gi,
-	/(^|[\n.!?]\s*)i need you to /gi,
+
+// First-person request framing — safe to drop anywhere, leaving the imperative.
+// e.g. "As a dev, I would like to build X" -> "As a dev, build X".
+const FIRST_PERSON_PREAMBLES: ReadonlyArray<RegExp> = [
+	/\bi (?:was )?wondering if you (?:could|can|would) /gi,
+	/\bi(?:'d| would)? (?:like|want)(?: you)? to /gi,
+	/\bi(?:'d| would)? appreciate it if you (?:could|would) /gi,
+	/\bi need you to /gi,
+	/\bi'?m trying to /gi,
+];
+
+// Question framing — only stripped at the start of a sentence so a genuine
+// mid-sentence "how can you tell" is preserved. Leading boundary kept via `$1`.
+const SENTENCE_START_PREAMBLES: ReadonlyArray<RegExp> = [
 	/(^|[\n.!?]\s*)(?:can|could|would|will) you(?:,? please)? /gi,
 ];
 
@@ -132,7 +142,10 @@ export function optimizePrompt(
 		for (const re of POLITENESS) {
 			out = out.replace(re, '');
 		}
-		for (const re of PREAMBLES) {
+		for (const re of FIRST_PERSON_PREAMBLES) {
+			out = out.replace(re, '');
+		}
+		for (const re of SENTENCE_START_PREAMBLES) {
 			out = out.replace(re, '$1');
 		}
 		if (out !== before) {

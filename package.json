@@ -2,7 +2,7 @@
   "name": "prompt-optimizer",
   "displayName": "Prompt Optimizer",
   "description": "Compress your Copilot Chat prompts to save tokens before they are sent to the selected model.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "thavionai",
   "license": "MIT",
   "repository": {

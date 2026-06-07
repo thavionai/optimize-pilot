@@ -15,7 +15,7 @@ suite('optimizePrompt', () => {
 		assert.ok(applied.includes('filler words'));
 	});
 
-	test('strips request preambles only at sentence start', () => {
+	test('strips "could you" question framing at sentence start', () => {
 		const { optimized } = optimizePrompt('Could you write a parser?');
 		assert.strictEqual(optimized, 'write a parser?');
 	});
@@ -25,6 +25,28 @@ suite('optimizePrompt', () => {
 		assert.ok(
 			optimized.includes('can you'),
 			`expected mid-sentence phrase preserved, got: ${optimized}`,
+		);
+	});
+
+	test('removes first-person framing anywhere, not just sentence start', () => {
+		const { optimized, applied } = optimizePrompt(
+			'As a quant developer, I would like to develop a daily bot.',
+		);
+		assert.strictEqual(
+			optimized,
+			'As a quant developer, develop a daily bot.',
+		);
+		assert.ok(applied.includes('filler words'));
+	});
+
+	test('removes "I want to" / "I\'m trying to" framing', () => {
+		assert.strictEqual(
+			optimizePrompt('I want to build a parser.').optimized,
+			'build a parser.',
+		);
+		assert.strictEqual(
+			optimizePrompt("I'm trying to debug this loop.").optimized,
+			'debug this loop.',
 		);
 	});
 
