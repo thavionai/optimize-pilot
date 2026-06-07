@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 .claude/**
+.github/**
 **/*.vsix
 out/**
 node_modules/**
