@@ -27,51 +27,135 @@ export const DEFAULT_OPTIONS: OptimizerOptions = {
 };
 
 // Wordy phrase -> shorter equivalent. All replacements are meaning-preserving.
+// More specific phrases come before the generic ones that would also match them
+// (e.g. "due to the fact that" before "the fact that").
 const VERBOSE_PHRASES: ReadonlyArray<readonly [RegExp, string]> = [
+	// purpose
 	[/\bin order to\b/gi, 'to'],
-	[/\bdue to the fact that\b/gi, 'because'],
-	[/\bin the event that\b/gi, 'if'],
-	[/\b(?:in spite|despite) of the fact that\b/gi, 'although'],
+	[/\bso as to\b/gi, 'to'],
 	[/\bfor the purpose of\b/gi, 'for'],
-	[/\bwith (?:regard|respect) to\b/gi, 'regarding'],
+	// causation ("...the fact that" specifics first)
+	[/\bdue to the fact that\b/gi, 'because'],
+	[/\bowing to the fact that\b/gi, 'because'],
+	[/\bin view of the fact that\b/gi, 'because'],
+	[/\bin light of the fact that\b/gi, 'because'],
+	[/\bby virtue of the fact that\b/gi, 'because'],
+	[/\bon the grounds that\b/gi, 'because'],
+	[/\bfor the reason that\b/gi, 'because'],
+	[/\bgiven the fact that\b/gi, 'since'],
+	// concession
+	[/\b(?:in spite|despite) of the fact that\b/gi, 'although'],
+	[/\bregardless of the fact that\b/gi, 'although'],
+	// condition
+	[/\bin the event that\b/gi, 'if'],
+	[/\bon the off chance that\b/gi, 'if'],
+	// reference / relation
+	[/\bwith (?:regard|regards|respect) to\b/gi, 'regarding'],
+	[/\bwith reference to\b/gi, 'regarding'],
 	[/\bin relation to\b/gi, 'regarding'],
-	[/\ba large number of\b/gi, 'many'],
-	[/\b(?:the|a) majority of\b/gi, 'most'],
-	[/\bat (?:this point in time|the present time)\b/gi, 'now'],
-	[/\bin the near future\b/gi, 'soon'],
+	[/\bin connection with\b/gi, 'regarding'],
+	[/\bwhen it comes to\b/gi, 'for'],
+	// instrument / accompaniment
+	[/\bin accordance with\b/gi, 'per'],
+	[/\bin conjunction with\b/gi, 'with'],
+	[/\bwith the help of\b/gi, 'using'],
+	[/\bby means of\b/gi, 'by'],
+	[/\bwith the exception of\b/gi, 'except'],
+	[/\bin the absence of\b/gi, 'without'],
+	// time
+	[/\b(?:in|during) the course of\b/gi, 'during'],
+	[/\buntil such time as\b/gi, 'until'],
+	[/\bduring the time that\b/gi, 'while'],
+	[/\bat (?:this point in time|the present time|the present moment)\b/gi, 'now'],
+	[/\bin the (?:near|not too distant) future\b/gi, 'soon'],
 	[/\bprior to\b/gi, 'before'],
+	[/\bin advance of\b/gi, 'before'],
 	[/\bsubsequent to\b/gi, 'after'],
+	[/\bfollowing the completion of\b/gi, 'after'],
+	[/\bon a regular basis\b/gi, 'regularly'],
+	[/\bon a (daily|weekly|monthly|quarterly|yearly) basis\b/gi, '$1'],
+	[/\bin a timely manner\b/gi, 'promptly'],
+	[/\bat all times\b/gi, 'always'],
+	// quantity
+	[/\ba large number of\b/gi, 'many'],
+	[/\ba (?:significant|substantial|considerable) number of\b/gi, 'many'],
+	[/\ba (?:small|limited) number of\b/gi, 'a few'],
+	[/\ba (?:sufficient|adequate) number of\b/gi, 'enough'],
+	[/\ba number of\b/gi, 'several'],
+	[/\b(?:the|a) majority of\b/gi, 'most'],
+	[/\ba great deal of\b/gi, 'much'],
+	[/\bin most cases\b/gi, 'usually'],
+	[/\bin many cases\b/gi, 'often'],
+	// capability / action
+	[/\b(?:has|have) the ability to\b/gi, 'can'],
+	[/\b(?:has|have) the capacity to\b/gi, 'can'],
+	[/\b(?:is|are) able to\b/gi, 'can'],
+	[/\bmakes use of\b/gi, 'uses'],
 	[/\bmake use of\b/gi, 'use'],
+	[/\butilizes\b/gi, 'uses'],
 	[/\butilize\b/gi, 'use'],
+	[/\butilization\b/gi, 'use'],
+	[/\btakes into (?:account|consideration)\b/gi, 'considers'],
+	[/\btake into (?:account|consideration)\b/gi, 'consider'],
+	// redundant pairs
+	[/\beach and every\b/gi, 'every'],
+	[/\bany and all\b/gi, 'all'],
+	[/\bfirst and foremost\b/gi, 'first'],
+	[/\bend result\b/gi, 'result'],
+	[/\bfinal outcome\b/gi, 'outcome'],
+	[/\bfuture plans\b/gi, 'plans'],
+	[/\bpast history\b/gi, 'history'],
+	[/\bcompletely eliminate\b/gi, 'eliminate'],
+	[/\babsolutely essential\b/gi, 'essential'],
+	[/\bbasic fundamentals\b/gi, 'fundamentals'],
+	// connectives / generic (run after the specifics above)
+	[/\bas well as\b/gi, 'and'],
+	[/\bin addition to\b/gi, 'besides'],
+	[/\bthe reason why\b/gi, 'why'],
+	[/\b(?:the question )?as to whether\b/gi, 'whether'],
+	[/\bwhether or not\b/gi, 'whether'],
+	[/\bthe fact that\b/gi, 'that'],
 ];
 
 // Phrases that add nothing to an instruction and can simply be deleted.
 const FILLER_NOISE: ReadonlyArray<RegExp> = [
 	/\bit is important to note that\b/gi,
-	/\bplease note that\b/gi,
+	/\bit is worth noting that\b/gi,
+	/\bit should be noted that\b/gi,
+	/\bit goes without saying that\b/gi,
+	/\bit is recommended that\b/gi,
+	/\bplease (?:note|be advised) that\b/gi,
 	/\bneedless to say\b/gi,
 	/\bas a matter of fact\b/gi,
-	/\bin my opinion\b/gi,
-	/\b(?:basically|actually|essentially)\b/gi,
+	/\bfor what it'?s worth\b/gi,
+	/\bat the end of the day\b/gi,
+	/\bin (?:my|our) (?:honest )?opinion\b/gi,
+	/\bas you (?:can see|know|are aware)\b/gi,
+	/\b(?:to be honest|in all honesty|honestly speaking)\b/gi,
+	/\bfeel free to\b/gi,
+	/\bgo ahead and\b/gi,
+	/\b(?:basically|actually|essentially|simply|obviously|clearly|literally)\b/gi,
 ];
 
 // Pure politeness — always safe to drop anywhere.
 const POLITENESS: ReadonlyArray<RegExp> = [
 	/\bplease\b/gi,
 	/\bkindly\b/gi,
+	/\bif (?:it'?s |it is )?possible\b/gi,
+	/\bif you don'?t mind\b/gi,
 	/\b(?:thank you|thanks)(?: (?:very much|so much|a lot|in advance))?[.!]?/gi,
 ];
-
-// Request preambles — only stripped at the start of a line or sentence so we
-// never mangle a genuine mid-sentence question like "how can you tell".
-// The leading boundary is captured and re-emitted via `$1`.
 
 // First-person request framing — safe to drop anywhere, leaving the imperative.
 // e.g. "As a dev, I would like to build X" -> "As a dev, build X".
 const FIRST_PERSON_PREAMBLES: ReadonlyArray<RegExp> = [
+	/\bwhat i(?:'d| would)? (?:want|like)(?: you)? to do is (?:to )?/gi,
 	/\bi (?:was )?wondering if you (?:could|can|would) /gi,
-	/\bi(?:'d| would)? (?:like|want)(?: you)? to /gi,
-	/\bi(?:'d| would)? appreciate it if you (?:could|would) /gi,
+	/\bi(?:'d| would)? appreciate (?:it )?if you (?:could|would|can) /gi,
+	/\bi(?:'d| would)? like for you to /gi,
+	/\bi(?:'d| would)? (?:just )?(?:like|want)(?: you)? to /gi,
+	/\bi(?:'m| am) (?:looking|hoping) to /gi,
+	/\bi(?:'m| am) interested in /gi,
 	/\bi need you to /gi,
 	/\bi'?m trying to /gi,
 ];
@@ -153,9 +237,17 @@ export function optimizePrompt(
 		}
 	}
 
-	// Clean up artifacts left by deletions (double spaces, space-before-punctuation).
+	// Clean up artifacts left by deletions: double spaces, space-before-punctuation,
+	// a comma/semicolon swallowed by stronger punctuation, and orphaned leading
+	// punctuation (e.g. removing "if possible," from the start of a sentence).
 	if (options.removeFillerWords || options.simplifyVerbosePhrases) {
-		out = out.replace(/[ \t]{2,}/g, ' ').replace(/ +([.,;:!?])/g, '$1');
+		out = out
+			.replace(/[ \t]{2,}/g, ' ')
+			.replace(/([,;:])(?:\s*[,;:])+/g, '$1')
+			.replace(/ +([.,;:!?])/g, '$1')
+			.replace(/([,;:]) *([.!?])/g, '$2')
+			.replace(/^[ \t,;:]+/, '')
+			.replace(/\n[ \t,;:]+/g, '\n');
 	}
 
 	if (options.collapseWhitespace) {

@@ -57,6 +57,40 @@ suite('optimizePrompt', () => {
 		assert.strictEqual(optimized, 'Refactor this to use the cache.');
 	});
 
+	test('shortens an extended set of verbose phrases', () => {
+		assert.strictEqual(
+			optimizePrompt('The model is able to run on a daily basis.').optimized,
+			'The model can run daily.',
+		);
+		assert.strictEqual(
+			optimizePrompt('Take into account the fact that the majority of users are mobile.').optimized,
+			'consider that most users are mobile.',
+		);
+		assert.strictEqual(
+			optimizePrompt('Handle a large number of requests whether or not it scales.').optimized,
+			'Handle many requests whether it scales.',
+		);
+	});
+
+	test('strips orphaned leading punctuation after removal', () => {
+		assert.strictEqual(
+			optimizePrompt('If possible, refactor this.').optimized,
+			'refactor this.',
+		);
+		assert.strictEqual(
+			optimizePrompt("Refactor this, if you don't mind.").optimized,
+			'Refactor this.',
+		);
+	});
+
+	test('does not produce doubled commas', () => {
+		const { optimized } = optimizePrompt(
+			'Could you, please, write tests as well as docs?',
+		);
+		assert.ok(!/,,/.test(optimized), `doubled comma in: ${optimized}`);
+		assert.ok(optimized.includes('and docs'));
+	});
+
 	test('preserves fenced code blocks verbatim', () => {
 		const input = 'Optimize:\n```js\nconst   x =   1;  // please keep spacing\n```';
 		const { optimized } = optimizePrompt(input);
