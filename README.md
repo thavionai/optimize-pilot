@@ -1,8 +1,28 @@
 # Prompt Optimizer
 
+[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/thavionai.prompt-optimizer?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=thavionai.prompt-optimizer)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 A VS Code extension that **compresses your Copilot Chat prompts to save tokens** before they are sent to the model you selected — without changing what you mean.
 
 It registers a chat participant, `@optimize`, in the Copilot Chat panel. You type your prompt, it strips away the parts that cost tokens but carry no instruction, shows you how much it saved, and forwards the slimmed-down prompt to the model picked in the chat model dropdown.
+
+- **Repository:** https://github.com/thavionai/prompt-optimizer
+- **Marketplace:** https://marketplace.visualstudio.com/items?itemName=thavionai.prompt-optimizer
+
+## Install
+
+**From the Marketplace** — search for *Prompt Optimizer* in the Extensions view (`Cmd/Ctrl+Shift+X`), or:
+
+```bash
+code --install-extension thavionai.prompt-optimizer
+```
+
+**From a `.vsix`** — download `prompt-optimizer-<version>.vsix` and:
+
+```bash
+code --install-extension prompt-optimizer-0.0.1.vsix
+```
 
 ## How it works
 
@@ -60,6 +80,7 @@ npm install
 npm run watch     # incremental build
 # press F5 in VS Code to launch the Extension Development Host
 npm test          # run the optimizer test suite
+npx vsce package  # build a .vsix
 ```
 
 ## License
