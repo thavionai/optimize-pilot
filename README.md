@@ -83,6 +83,23 @@ npm test          # run the optimizer test suite
 npx vsce package  # build a .vsix
 ```
 
+## Releasing
+
+Publishing is automated by `.github/workflows/publish.yml`. One-time setup: add a
+repository secret `VSCE_PAT` (an Azure DevOps Personal Access Token with the
+**Marketplace → Manage** scope) under *Settings → Secrets and variables → Actions*.
+
+To cut a release, bump the version and push a matching tag:
+
+```bash
+npm version patch          # bumps package.json + creates a commit
+git push --follow-tags     # pushes the commit and the vX.Y.Z tag
+```
+
+The workflow verifies the tag matches `package.json`, type-checks, lints, runs the
+tests, and publishes to the Marketplace. (The tag version must equal the
+`package.json` version or the job fails.)
+
 ## License
 
 MIT
