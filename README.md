@@ -1,4 +1,4 @@
-# Prompt Optimizer
+# Optimize Pilot
 
 [![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/thavionai.optimize-pilot?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=thavionai.optimize-pilot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
@@ -12,7 +12,7 @@ It registers a chat participant, `@optimize`, in the Copilot Chat panel. You typ
 
 ## Install
 
-**From the Marketplace** — search for *Prompt Optimizer* in the Extensions view (`Cmd/Ctrl+Shift+X`), or:
+**From the Marketplace** — search for *Optimize Pilot* in the Extensions view (`Cmd/Ctrl+Shift+X`), or:
 
 ```bash
 code --install-extension thavionai.optimize-pilot
