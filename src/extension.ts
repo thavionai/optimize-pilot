@@ -16,6 +16,7 @@ function readOptions(): OptimizerOptions & {
 		collapseWhitespace: cfg.get('collapseWhitespace', true),
 		removeFillerWords: cfg.get('removeFillerWords', true),
 		simplifyVerbosePhrases: cfg.get('simplifyVerbosePhrases', true),
+		contractions: cfg.get('contractions', true),
 		forwardToModel: cfg.get('forwardToModel', true),
 		showSavings: cfg.get('showSavings', true),
 	};

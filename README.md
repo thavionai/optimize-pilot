@@ -52,8 +52,9 @@ All compression is **local, deterministic, and free** — no tokens are spent op
 
 | Rule group | Example |
 |---|---|
-| Verbose phrases | `in order to` → `to`, `utilize` → `use`, `due to the fact that` → `because` |
-| Filler / politeness | removes `please`, `kindly`, `thanks`, and leading `could you` / `I'd like you to` |
+| Verbose phrases | `in order to` → `to`, `utilize` → `use`, `make a decision` → `decide` |
+| Filler / politeness | removes `please`, `kindly`, `thanks`, hedges (`very`, `really`), and framing (`could you`, `your job is to`) |
+| Contractions | `do not` → `don't`, `it is` → `it's`, `cannot` → `can't` |
 | Whitespace | collapses repeated spaces and blank lines |
 
 Request preambles like *"could you"* are only removed at the start of a sentence, so a genuine mid-sentence phrase is preserved.
@@ -65,6 +66,7 @@ Request preambles like *"could you"* are only removed at the start of a sentence
 | `promptOptimizer.collapseWhitespace` | `true` | Collapse runs of whitespace and excess blank lines. |
 | `promptOptimizer.removeFillerWords` | `true` | Remove politeness/preamble words. |
 | `promptOptimizer.simplifyVerbosePhrases` | `true` | Replace wordy phrases with shorter equivalents. |
+| `promptOptimizer.contractions` | `true` | Contract two-word phrases (e.g. `do not` → `don't`, `it is` → `it's`). |
 | `promptOptimizer.forwardToModel` | `true` | Send the optimized prompt to the model and stream the answer. When `false`, only the optimized prompt is shown. |
 | `promptOptimizer.showSavings` | `true` | Show before/after token counts and percentage saved. |
 

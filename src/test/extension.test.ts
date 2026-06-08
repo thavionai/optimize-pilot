@@ -169,8 +169,25 @@ suite('optimizePrompt', () => {
 			removeFillerWords: false,
 			collapseWhitespace: false,
 			simplifyVerbosePhrases: false,
+			contractions: false,
 		});
 		assert.strictEqual(optimized, 'Please   keep   this.');
+	});
+
+	test('contracts two-word phrases', () => {
+		assert.strictEqual(
+			optimizePrompt('Do not change it; it is not ready and cannot run.').optimized,
+			"don't change it; it isn't ready and can't run.",
+		);
+		const { applied } = optimizePrompt('It is broken.');
+		assert.ok(applied.includes('contractions'));
+	});
+
+	test('does not contract "have to"', () => {
+		assert.strictEqual(
+			optimizePrompt('You have to handle errors but you have options.').optimized,
+			"You have to handle errors but you've options.",
+		);
 	});
 
 	test('estimateTokens approximates by length', () => {

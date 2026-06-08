@@ -11,6 +11,8 @@ export interface OptimizerOptions {
 	removeFillerWords: boolean;
 	/** Swap wordy phrases for shorter, equivalent ones. */
 	simplifyVerbosePhrases: boolean;
+	/** Contract two-word phrases (e.g. "do not" -> "don't"). */
+	contractions: boolean;
 }
 
 export interface OptimizationResult {
@@ -24,6 +26,7 @@ export const DEFAULT_OPTIONS: OptimizerOptions = {
 	collapseWhitespace: true,
 	removeFillerWords: true,
 	simplifyVerbosePhrases: true,
+	contractions: true,
 };
 
 // Wordy phrase -> shorter equivalent. All replacements are meaning-preserving.
@@ -263,6 +266,40 @@ const SENTENCE_START_PREAMBLES: ReadonlyArray<RegExp> = [
 	/(^|[\n.!?]\s*)(?:would it be|is it) possible (?:for you )?to /gi,
 ];
 
+// Two-word phrases -> contractions. Meaning-preserving and usually 1 token
+// shorter. "have" is not contracted before "to" ("have to" = must, must stay).
+const CONTRACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
+	[/\bcan ?not\b/gi, "can't"],
+	[/\bdo not\b/gi, "don't"],
+	[/\bdoes not\b/gi, "doesn't"],
+	[/\bdid not\b/gi, "didn't"],
+	[/\bis not\b/gi, "isn't"],
+	[/\bare not\b/gi, "aren't"],
+	[/\bwas not\b/gi, "wasn't"],
+	[/\bwere not\b/gi, "weren't"],
+	[/\bhas not\b/gi, "hasn't"],
+	[/\bhave not\b/gi, "haven't"],
+	[/\bhad not\b/gi, "hadn't"],
+	[/\bwill not\b/gi, "won't"],
+	[/\bwould not\b/gi, "wouldn't"],
+	[/\bshould not\b/gi, "shouldn't"],
+	[/\bcould not\b/gi, "couldn't"],
+	[/\bmust not\b/gi, "mustn't"],
+	[/\bit is\b/gi, "it's"],
+	[/\bthat is\b/gi, "that's"],
+	[/\bthere is\b/gi, "there's"],
+	[/\bhere is\b/gi, "here's"],
+	[/\bwhat is\b/gi, "what's"],
+	[/\bwho is\b/gi, "who's"],
+	[/\byou are\b/gi, "you're"],
+	[/\bwe are\b/gi, "we're"],
+	[/\bthey are\b/gi, "they're"],
+	[/\bI am\b/g, "I'm"],
+	[/\b(you|we|they|I) will\b/gi, "$1'll"],
+	[/\b(you|we|they|I) would\b/gi, "$1'd"],
+	[/\b(you|we|they|I) have\b(?! to\b)/gi, "$1've"],
+];
+
 // A non-printing sentinel that no whitespace/punctuation rule can touch, used
 // to fence off masked code while prose rules run.
 const SENTINEL = String.fromCharCode(0);
@@ -312,6 +349,16 @@ export function optimizePrompt(
 		}
 		if (out !== before) {
 			applied.push('verbose phrases');
+		}
+	}
+
+	if (options.contractions) {
+		const before = out;
+		for (const [re, rep] of CONTRACTIONS) {
+			out = out.replace(re, rep);
+		}
+		if (out !== before) {
+			applied.push('contractions');
 		}
 	}
 

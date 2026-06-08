@@ -2,7 +2,7 @@
   "name": "optimize-pilot",
   "displayName": "Optimize Pilot",
   "description": "Compress your Copilot Chat prompts to save tokens before they are sent to the selected model.",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "publisher": "thavionai",
   "license": "MIT",
   "repository": {
@@ -52,6 +52,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Replace wordy phrases with shorter equivalents (e.g. *in order to* → *to*)."
+        },
+        "promptOptimizer.contractions": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Contract two-word phrases to save tokens (e.g. *do not* → *don't*, *it is* → *it's*)."
         },
         "promptOptimizer.forwardToModel": {
           "type": "boolean",

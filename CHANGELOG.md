@@ -2,6 +2,10 @@
 
 All notable changes to the "prompt-optimizer" extension will be documented in this file.
 
+## [0.0.7]
+
+- New **contractions** pass (`promptOptimizer.contractions`, on by default): contracts two-word phrases to save tokens — `do not` → `don't`, `it is` → `it's`, `cannot` → `can't`, `you are` → `you're`, `I will` → `I'll`, etc. Never contracts `have to` (which means *must*). Applies to almost every prompt.
+
 ## [0.0.6]
 
 - Even more rules: extra de-nominalizations (*make a comparison between* → *compare*, *provide a description of* → *describe*, *give rise to* → *cause*, *put emphasis on* → *emphasize*, *take a look at* → *review*, *have an impact on* → *affect*), causation/basis reductions (*as a result of* → *because of*, *on the basis of* → *based on*, *in order for* → *for*), and prompt-framing removal (*your job is to*, *my goal is to*, *I was hoping you could*, *would it be possible to*).
