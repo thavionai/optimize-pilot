@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { optimizePrompt, estimateTokens, DEFAULT_OPTIONS } from '../optimizer';
+import { isProse, processAttachment, formatBundle } from '../attachments';
 
 suite('optimizePrompt', () => {
 	test('collapses whitespace and trims', () => {
@@ -193,5 +194,40 @@ suite('optimizePrompt', () => {
 	test('estimateTokens approximates by length', () => {
 		assert.strictEqual(estimateTokens('abcd'), 1);
 		assert.strictEqual(estimateTokens('abcde'), 2);
+	});
+});
+
+suite('attachments', () => {
+	test('classifies prose vs code by extension', () => {
+		assert.ok(isProse('README.md'));
+		assert.ok(isProse('notes.txt'));
+		assert.ok(!isProse('server.ts'));
+		assert.ok(!isProse('config.yaml'));
+		assert.ok(!isProse('Dockerfile')); // no extension -> preserve
+	});
+
+	test('compresses prose attachments', () => {
+		const a = processAttachment({
+			name: 'doc.md',
+			content: 'Please do not change it; I would like you to review it.',
+		});
+		assert.ok(a.prose);
+		assert.strictEqual(a.content, "don't change it; review it.");
+	});
+
+	test('preserves code attachments byte-for-byte', () => {
+		const code = 'def  f( x ):\n    return   x  # please keep';
+		const a = processAttachment({ name: 'a.py', content: code });
+		assert.ok(!a.prose);
+		assert.strictEqual(a.content, code);
+	});
+
+	test('formatBundle delimits attachments and drops empty prompt', () => {
+		const bundle = formatBundle('', [
+			{ name: 'a.py', content: 'x=1', prose: false },
+		]);
+		assert.ok(bundle.startsWith('----- Attached file: a.py -----'));
+		assert.ok(bundle.includes('x=1'));
+		assert.ok(!bundle.startsWith('\n'));
 	});
 });

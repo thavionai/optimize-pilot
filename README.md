@@ -59,6 +59,15 @@ All compression is **local, deterministic, and free** — no tokens are spent op
 
 Request preambles like *"could you"* are only removed at the start of a sentence, so a genuine mid-sentence phrase is preserved.
 
+### Attachments
+
+Files you attach with `#` are folded into the forwarded request. **Prose**
+files (`.md`, `.txt`, `.rst`, …) are compressed with the same rules; **code**
+and structured data (`.ts`, `.py`, `.json`, `.yaml`, …) are sent **byte-for-byte**
+— trimming code is risky (whitespace is syntax in some languages) and low-value,
+so it's deliberately avoided. The token figures cover the whole bundle. Binary
+and very large (>512 KB) files are skipped.
+
 ## Settings
 
 | Setting | Default | Description |
@@ -67,6 +76,7 @@ Request preambles like *"could you"* are only removed at the start of a sentence
 | `promptOptimizer.removeFillerWords` | `true` | Remove politeness/preamble words. |
 | `promptOptimizer.simplifyVerbosePhrases` | `true` | Replace wordy phrases with shorter equivalents. |
 | `promptOptimizer.contractions` | `true` | Contract two-word phrases (e.g. `do not` → `don't`, `it is` → `it's`). |
+| `promptOptimizer.includeAttachments` | `true` | Fold `#`-attached files into the request: compress prose (`.md`/`.txt`), preserve code/JSON/YAML verbatim. |
 | `promptOptimizer.responseBrevity` | `false` | Append a short "be concise" instruction to the forwarded prompt. Cuts **output** tokens (usually the bulk of the cost), unlike compression which only trims input. |
 | `promptOptimizer.brevityInstruction` | `""` | Custom brevity text; empty uses the built-in instruction. |
 | `promptOptimizer.forwardToModel` | `true` | Send the optimized prompt to the model and stream the answer. When `false`, only the optimized prompt is shown. |

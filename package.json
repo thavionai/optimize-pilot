@@ -2,7 +2,7 @@
   "name": "optimize-pilot",
   "displayName": "Optimize Pilot",
   "description": "Compress your Copilot Chat prompts to save tokens before they are sent to the selected model.",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "publisher": "thavionai",
   "license": "MIT",
   "repository": {
@@ -67,6 +67,11 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Custom text used when `#promptOptimizer.responseBrevity#` is on. Leave empty to use the built-in instruction (\"Be concise: answer directly with no preamble…\")."
+        },
+        "promptOptimizer.includeAttachments": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Fold files attached with `#` into the forwarded request. Prose files (`.md`, `.txt`, …) are compressed; source code, JSON, YAML, etc. are preserved byte-for-byte. (Without this, attachments are not forwarded by the participant.)"
         },
         "promptOptimizer.forwardToModel": {
           "type": "boolean",

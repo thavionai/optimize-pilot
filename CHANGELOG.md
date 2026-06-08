@@ -2,6 +2,10 @@
 
 All notable changes to the "prompt-optimizer" extension will be documented in this file.
 
+## [0.0.9]
+
+- **Attachments support** (`promptOptimizer.includeAttachments`, on by default): files attached with `#` are now folded into the forwarded request (previously the participant dropped them). Prose files (`.md`, `.txt`, …) are compressed with the same engine; source code, JSON, YAML, etc. are preserved byte-for-byte. Token savings and the before/after counts now cover the whole bundle (prompt + attachments), where the real savings are. Binary and very large (>512 KB) files are skipped.
+
 ## [0.0.8]
 
 - New **response brevity** feature (`promptOptimizer.responseBrevity`, off by default): appends a short "answer concisely" instruction to the forwarded prompt, cutting the model's **output** tokens — which are usually the bulk of a chat's cost. Customizable via `promptOptimizer.brevityInstruction`. The token-savings figure still reports input compression only, so it stays honest.

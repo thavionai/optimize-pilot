@@ -4,6 +4,15 @@ import {
 	estimateTokens,
 	OptimizerOptions,
 } from './optimizer';
+import {
+	ResolvedAttachment,
+	ProcessedAttachment,
+	processAttachment,
+	formatBundle,
+} from './attachments';
+
+// Skip attachments larger than this (bytes) or that look binary.
+const MAX_ATTACHMENT_BYTES = 512 * 1024;
 
 const PARTICIPANT_ID = 'prompt-optimizer.optimize';
 
@@ -18,6 +27,7 @@ function readOptions(): OptimizerOptions & {
 	showSavings: boolean;
 	responseBrevity: boolean;
 	brevityInstruction: string;
+	includeAttachments: boolean;
 } {
 	const cfg = vscode.workspace.getConfiguration('promptOptimizer');
 	return {
@@ -29,7 +39,57 @@ function readOptions(): OptimizerOptions & {
 		showSavings: cfg.get('showSavings', true),
 		responseBrevity: cfg.get('responseBrevity', false),
 		brevityInstruction: cfg.get('brevityInstruction', '').trim(),
+		includeAttachments: cfg.get('includeAttachments', true),
 	};
+}
+
+/** Decode a file to text, skipping oversized or binary content. */
+async function readFileText(uri: vscode.Uri): Promise<string | null> {
+	try {
+		const bytes = await vscode.workspace.fs.readFile(uri);
+		if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+			return null;
+		}
+		if (bytes.subarray(0, 8000).includes(0)) {
+			return null; // NUL byte -> binary
+		}
+		return Buffer.from(bytes).toString('utf8');
+	} catch {
+		return null;
+	}
+}
+
+function basename(uri: vscode.Uri): string {
+	const parts = uri.path.split('/');
+	return parts[parts.length - 1] || uri.path;
+}
+
+/** Resolve chat references (files / selections) into plain text attachments. */
+async function resolveAttachments(
+	references: readonly vscode.ChatPromptReference[],
+): Promise<ResolvedAttachment[]> {
+	const out: ResolvedAttachment[] = [];
+	for (const ref of references) {
+		const value = ref.value;
+		if (typeof value === 'string') {
+			out.push({ name: ref.id || 'selection', content: value });
+		} else if (value instanceof vscode.Uri) {
+			const content = await readFileText(value);
+			if (content !== null) {
+				out.push({ name: basename(value), content });
+			}
+		} else if (value instanceof vscode.Location) {
+			const content = await readFileText(value.uri);
+			if (content !== null) {
+				const lines = content.split('\n');
+				const slice = lines
+					.slice(value.range.start.line, value.range.end.line + 1)
+					.join('\n');
+				out.push({ name: basename(value.uri), content: slice });
+			}
+		}
+	}
+	return out;
 }
 
 async function countTokens(
@@ -64,23 +124,38 @@ const handler: vscode.ChatRequestHandler = async (
 
 	const { optimized, applied } = optimizePrompt(original, opts);
 
+	// Fold in attached files: compress prose, preserve code verbatim.
+	let rawAtts: ResolvedAttachment[] = [];
+	let procAtts: ProcessedAttachment[] = [];
+	if (opts.includeAttachments && request.references?.length) {
+		rawAtts = await resolveAttachments(request.references);
+		procAtts = rawAtts.map((a) => processAttachment(a, opts));
+	}
+
+	const beforeBundle = formatBundle(
+		original,
+		rawAtts.map((a) => ({ name: a.name, content: a.content, prose: false })),
+	);
+	const afterBundle = formatBundle(optimized, procAtts);
+
 	// Response brevity shapes the model's *output* (where most tokens go). It is
-	// appended to the prompt we send; the token-savings figure below still
-	// reflects input compression only, so it stays honest.
+	// appended to what we send; the token-savings figure below reflects input
+	// compression only, so it stays honest.
 	const brevity = opts.responseBrevity
 		? opts.brevityInstruction || DEFAULT_BREVITY_INSTRUCTION
 		: '';
-	const promptToSend = brevity ? `${optimized}\n\n${brevity}` : optimized;
+	const promptToSend = brevity ? `${afterBundle}\n\n${brevity}` : afterBundle;
 
 	if (opts.showSavings) {
 		const [before, after] = await Promise.all([
-			countTokens(request.model, original, token),
-			countTokens(request.model, optimized, token),
+			countTokens(request.model, beforeBundle, token),
+			countTokens(request.model, afterBundle, token),
 		]);
 		const saved = before.count - after.count;
 		const pct = before.count > 0 ? Math.round((saved / before.count) * 100) : 0;
 		const approx = before.exact && after.exact ? '' : '~';
 		const sign = saved >= 0 ? 'saved' : 'added';
+		const compressed = procAtts.filter((a) => a.prose).length;
 
 		stream.markdown(
 			`**Tokens:** ${approx}${before.count} → ${approx}${after.count} ` +
@@ -89,6 +164,10 @@ const handler: vscode.ChatRequestHandler = async (
 				(applied.length
 					? `**Applied:** ${applied.join(', ')}  \n`
 					: '_No changes were needed._  \n') +
+				(procAtts.length
+					? `**Attachments:** ${procAtts.length} included ` +
+						`(${compressed} prose compressed, ${procAtts.length - compressed} code preserved)  \n`
+					: '') +
 				(brevity
 					? '**Response brevity:** on — asked the model for a shorter answer to cut output tokens.\n\n'
 					: '\n'),
@@ -97,7 +176,15 @@ const handler: vscode.ChatRequestHandler = async (
 
 	if (!opts.forwardToModel) {
 		stream.markdown('**Optimized prompt:**\n');
-		stream.markdown('```text\n' + promptToSend + '\n```');
+		stream.markdown(
+			'```text\n' + (brevity ? `${optimized}\n\n${brevity}` : optimized) + '\n```',
+		);
+		if (procAtts.length) {
+			stream.markdown(
+				`\n\n_+ ${procAtts.length} attachment(s) would be forwarded ` +
+					`(${procAtts.filter((a) => a.prose).length} compressed, the rest preserved)._`,
+			);
+		}
 		return;
 	}
 
