@@ -2,6 +2,11 @@
 
 All notable changes to the "prompt-optimizer" extension will be documented in this file.
 
+## [0.0.6]
+
+- Even more rules: extra de-nominalizations (*make a comparison between* → *compare*, *provide a description of* → *describe*, *give rise to* → *cause*, *put emphasis on* → *emphasize*, *take a look at* → *review*, *have an impact on* → *affect*), causation/basis reductions (*as a result of* → *because of*, *on the basis of* → *based on*, *in order for* → *for*), and prompt-framing removal (*your job is to*, *my goal is to*, *I was hoping you could*, *would it be possible to*).
+- More filler (*by and large*, *to tell you the truth*, *do me a favor and*, *as far as I'm concerned*).
+
 ## [0.0.5]
 
 - More optimization rules: de-nominalizations (*make a decision* → *decide*, *provide an explanation for* → *explain*, *is dependent on* → *depends on*, *come to the conclusion that* → *conclude that*), more synonym swaps (*the way in which* → *how*, *a wide variety of* → *various*, *all of the* → *all the*, *a total of* → removed, *in spite of* → *despite*, *in regards to* → *regarding*), more filler removal (*the bottom line is*, *as previously mentioned*, *that being said*, *for all intents and purposes*), more politeness (*at your earliest convenience*, *when you get a chance*).

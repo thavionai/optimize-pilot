@@ -101,6 +101,28 @@ suite('optimizePrompt', () => {
 		);
 	});
 
+	test('removes prompt/instruction framing', () => {
+		assert.strictEqual(
+			optimizePrompt('Your job is to make a comparison between the two algorithms.').optimized,
+			'compare the two algorithms.',
+		);
+		assert.strictEqual(
+			optimizePrompt('I was hoping you could provide a description of the API.').optimized,
+			'describe the API.',
+		);
+		assert.strictEqual(
+			optimizePrompt('Would it be possible to take a look at the config?').optimized,
+			'review the config?',
+		);
+	});
+
+	test('handles more de-nominalizations and causation', () => {
+		assert.strictEqual(
+			optimizePrompt('This has an impact on latency and gives rise to retries.').optimized,
+			'This affects latency and causes retries.',
+		);
+	});
+
 	test('strips orphaned leading punctuation after removal', () => {
 		assert.strictEqual(
 			optimizePrompt('If possible, refactor this.').optimized,

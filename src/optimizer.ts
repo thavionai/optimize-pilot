@@ -142,6 +142,43 @@ const VERBOSE_PHRASES: ReadonlyArray<readonly [RegExp, string]> = [
 	// time
 	[/\bat (?:this juncture|this moment in time)\b/gi, 'now'],
 	[/\bin spite of\b/gi, 'despite'],
+	[/\bin (?:this day and age|today'?s world)\b/gi, 'today'],
+	// more de-nominalizations
+	[/\b(?:provide|give) a description of\b/gi, 'describe'],
+	[/\bmake (?:a comparison|comparisons) (?:of|between)\b/gi, 'compare'],
+	[/\bmake (?:modifications|changes) to\b/gi, 'change'],
+	[/\bmake an attempt to\b/gi, 'try to'],
+	[/\bmake reference to\b/gi, 'reference'],
+	[/\bmake mention of\b/gi, 'mention'],
+	[/\bmake a determination\b/gi, 'determine'],
+	[/\bmake an evaluation of\b/gi, 'evaluate'],
+	[/\b(?:perform|conduct) a review of\b/gi, 'review'],
+	[/\b(?:carry out|conduct|perform) an investigation of\b/gi, 'investigate'],
+	[/\bgives rise to\b/gi, 'causes'],
+	[/\bgive rise to\b/gi, 'cause'],
+	[/\b(?:reach|arrive at) a decision\b/gi, 'decide'],
+	[/\b(?:put|place) (?:an )?emphasis on\b/gi, 'emphasize'],
+	[/\btake a look at\b/gi, 'review'],
+	[/\bhas an impact on\b/gi, 'affects'],
+	[/\bhave an impact on\b/gi, 'affect'],
+	[/\bhas a tendency to\b/gi, 'tends to'],
+	[/\bhave a tendency to\b/gi, 'tend to'],
+	[/\b(?:has|have) the option to\b/gi, 'can'],
+	[/\bhave a preference for\b/gi, 'prefer'],
+	[/\bhave a need (?:for|to)\b/gi, 'need'],
+	[/\bis in agreement with\b/gi, 'agrees with'],
+	[/\bis in possession of\b/gi, 'has'],
+	// causation / basis
+	[/\bin order for\b/gi, 'for'],
+	[/\bas a (?:result|consequence) of\b/gi, 'because of'],
+	[/\bon the basis of\b/gi, 'based on'],
+	[/\bfor the simple reason that\b/gi, 'because'],
+	// quantity / frequency
+	[/\bthe majority of the time\b/gi, 'usually'],
+	[/\bwith the possible exception of\b/gi, 'except'],
+	[/\bfew and far between\b/gi, 'rare'],
+	[/\bfirst of all\b/gi, 'first'],
+	[/\blast but not least\b/gi, 'finally'],
 	// connectives / generic (run after the specifics above)
 	[/\bas well as\b/gi, 'and'],
 	[/\bin addition to\b/gi, 'besides'],
@@ -174,6 +211,11 @@ const FILLER_NOISE: ReadonlyArray<RegExp> = [
 	/\bfor all intents and purposes\b/gi,
 	/\b(?:in a nutshell|to put it simply|simply put|in short)\b/gi,
 	/\b(?:that being said|having said that|with that said|that said)\b/gi,
+	/\bas far as (?:i am|i'?m) concerned\b/gi,
+	/\b(?:to tell you the truth|the truth of the matter is)\b/gi,
+	/\bbelieve it or not\b/gi,
+	/\b(?:in the final analysis|when all is said and done|by and large)\b/gi,
+	/\bdo me a favor and\b/gi,
 	/\b(?:basically|actually|essentially|simply|obviously|clearly|literally)\b/gi,
 ];
 
@@ -194,24 +236,31 @@ const POLITENESS: ReadonlyArray<RegExp> = [
 	/\b(?:thank you|thanks)(?: (?:very much|so much|a lot|in advance))?[.!]?/gi,
 ];
 
-// First-person request framing — safe to drop anywhere, leaving the imperative.
-// e.g. "As a dev, I would like to build X" -> "As a dev, build X".
+// Request / instruction framing — safe to drop anywhere, leaving the imperative.
+// e.g. "As a dev, I would like to build X" -> "As a dev, build X";
+// "Your job is to summarize this" -> "summarize this".
 const FIRST_PERSON_PREAMBLES: ReadonlyArray<RegExp> = [
 	/\bwhat i(?:'d| would)? (?:want|like)(?: you)? to do is (?:to )?/gi,
+	/\bwhat i (?:mean|am saying|'m saying) is:?\s*/gi,
 	/\bi (?:was )?wondering if you (?:could|can|would) /gi,
+	/\bi was hoping (?:that )?you could /gi,
 	/\bi(?:'d| would)? appreciate (?:it )?if you (?:could|would|can) /gi,
+	/\bi would be grateful if you (?:could|would) /gi,
 	/\bi(?:'d| would)? like for you to /gi,
 	/\bi(?:'d| would)? (?:just )?(?:like|want)(?: you)? to /gi,
 	/\bi(?:'m| am) (?:looking|hoping) to /gi,
 	/\bi(?:'m| am) interested in /gi,
 	/\bi need you to /gi,
 	/\bi'?m trying to /gi,
+	/\b(?:my|the) (?:goal|task|objective|job|aim) is to /gi,
+	/\byour (?:job|task|role|goal) is to /gi,
 ];
 
 // Question framing — only stripped at the start of a sentence so a genuine
 // mid-sentence "how can you tell" is preserved. Leading boundary kept via `$1`.
 const SENTENCE_START_PREAMBLES: ReadonlyArray<RegExp> = [
 	/(^|[\n.!?]\s*)(?:can|could|would|will) you(?:,? please)? /gi,
+	/(^|[\n.!?]\s*)(?:would it be|is it) possible (?:for you )?to /gi,
 ];
 
 // A non-printing sentinel that no whitespace/punctuation rule can touch, used

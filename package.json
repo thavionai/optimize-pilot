@@ -2,7 +2,7 @@
   "name": "optimize-pilot",
   "displayName": "Optimize Pilot",
   "description": "Compress your Copilot Chat prompts to save tokens before they are sent to the selected model.",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "thavionai",
   "license": "MIT",
   "repository": {
