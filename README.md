@@ -7,7 +7,7 @@ A VS Code extension that **compresses your Copilot Chat prompts to save tokens**
 
 It registers a chat participant, `@optimize`, in the Copilot Chat panel. You type your prompt, it strips away the parts that cost tokens but carry no instruction, shows you how much it saved, and forwards the slimmed-down prompt to the model picked in the chat model dropdown.
 
-- **Repository:** https://github.com/thavionai/prompt-optimizer
+- **Repository:** https://github.com/thavionai/optimize-pilot
 - **Marketplace:** https://marketplace.visualstudio.com/items?itemName=thavionai.optimize-pilot
 
 ## Install
@@ -30,7 +30,7 @@ code --install-extension optimize-pilot-0.0.4.vsix
 @optimize Could you please refactor this function in order to utilize the cache? Thanks!
 ```
 
-Prompt Optimizer rewrites that to:
+Optimize Pilot rewrites that to:
 
 ```
 refactor this function to use the cache?
