@@ -85,20 +85,22 @@ npx vsce package  # build a .vsix
 
 ## Releasing
 
-Publishing is automated by `.github/workflows/publish.yml`. One-time setup: add a
-repository secret `VSCE_PAT` (an Azure DevOps Personal Access Token with the
-**Marketplace → Manage** scope) under *Settings → Secrets and variables → Actions*.
-
-To cut a release, bump the version and push a matching tag:
+To cut a release:
 
 ```bash
-npm version patch          # bumps package.json + creates a commit
-git push --follow-tags     # pushes the commit and the vX.Y.Z tag
+npm version patch     # bump package.json
+npm test              # verify
+npx vsce package      # build optimize-pilot-<version>.vsix
 ```
 
-The workflow verifies the tag matches `package.json`, type-checks, lints, runs the
-tests, and publishes to the Marketplace. (The tag version must equal the
-`package.json` version or the job fails.)
+Then publish by uploading the `.vsix` in the Marketplace web UI
+(<https://marketplace.visualstudio.com/manage> → publisher → extension →
+**… → Update**).
+
+CI (`.github/workflows/ci.yml`) runs type-check, lint, and tests on every push
+and PR. A manual publish workflow (`.github/workflows/publish.yml`,
+`workflow_dispatch`) is available for CLI publishing once a `VSCE_PAT` secret
+(Azure DevOps PAT, **Marketplace → Manage** scope) is configured.
 
 ## License
 

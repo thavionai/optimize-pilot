@@ -1,13 +1,15 @@
 name: Publish Extension
 
-# Publishes to the Visual Studio Marketplace when a version tag (e.g. v0.0.2)
-# is pushed. Requires a repository secret `VSCE_PAT` — an Azure DevOps Personal
-# Access Token with the "Marketplace → Manage" scope.
+# Manual-only publish to the Visual Studio Marketplace.
+#
+# This does NOT run automatically — it would fail without a valid `VSCE_PAT`
+# secret (an Azure DevOps Personal Access Token with the "Marketplace → Manage"
+# scope). Releases are currently cut by uploading the .vsix in the Marketplace
+# web UI. Once a working PAT is added as the `VSCE_PAT` repo secret, run this
+# workflow manually from the Actions tab to publish the version in package.json.
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,16 +26,6 @@ jobs:
           cache: 'npm'
 
       - run: npm ci
-
-      - name: Verify tag matches package.json version
-        run: |
-          PKG_VERSION="$(node -p "require('./package.json').version")"
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::Tag v$TAG_VERSION does not match package.json version $PKG_VERSION"
-            exit 1
-          fi
-
       - run: npm run check-types
       - run: npm run lint
       - run: xvfb-run -a npm test
