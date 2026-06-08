@@ -2,6 +2,10 @@
 
 All notable changes to the "prompt-optimizer" extension will be documented in this file.
 
+## [0.0.8]
+
+- New **response brevity** feature (`promptOptimizer.responseBrevity`, off by default): appends a short "answer concisely" instruction to the forwarded prompt, cutting the model's **output** tokens — which are usually the bulk of a chat's cost. Customizable via `promptOptimizer.brevityInstruction`. The token-savings figure still reports input compression only, so it stays honest.
+
 ## [0.0.7]
 
 - New **contractions** pass (`promptOptimizer.contractions`, on by default): contracts two-word phrases to save tokens — `do not` → `don't`, `it is` → `it's`, `cannot` → `can't`, `you are` → `you're`, `I will` → `I'll`, etc. Never contracts `have to` (which means *must*). Applies to almost every prompt.

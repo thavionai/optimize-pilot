@@ -7,9 +7,17 @@ import {
 
 const PARTICIPANT_ID = 'prompt-optimizer.optimize';
 
+// Appended to the forwarded prompt when response brevity is on but no custom
+// instruction is configured. This is what actually reduces output tokens.
+const DEFAULT_BREVITY_INSTRUCTION =
+	'Be concise: answer directly with no preamble, restatement, or filler. ' +
+	'Prefer short bullet points; omit obvious caveats.';
+
 function readOptions(): OptimizerOptions & {
 	forwardToModel: boolean;
 	showSavings: boolean;
+	responseBrevity: boolean;
+	brevityInstruction: string;
 } {
 	const cfg = vscode.workspace.getConfiguration('promptOptimizer');
 	return {
@@ -19,6 +27,8 @@ function readOptions(): OptimizerOptions & {
 		contractions: cfg.get('contractions', true),
 		forwardToModel: cfg.get('forwardToModel', true),
 		showSavings: cfg.get('showSavings', true),
+		responseBrevity: cfg.get('responseBrevity', false),
+		brevityInstruction: cfg.get('brevityInstruction', '').trim(),
 	};
 }
 
@@ -54,6 +64,14 @@ const handler: vscode.ChatRequestHandler = async (
 
 	const { optimized, applied } = optimizePrompt(original, opts);
 
+	// Response brevity shapes the model's *output* (where most tokens go). It is
+	// appended to the prompt we send; the token-savings figure below still
+	// reflects input compression only, so it stays honest.
+	const brevity = opts.responseBrevity
+		? opts.brevityInstruction || DEFAULT_BREVITY_INSTRUCTION
+		: '';
+	const promptToSend = brevity ? `${optimized}\n\n${brevity}` : optimized;
+
 	if (opts.showSavings) {
 		const [before, after] = await Promise.all([
 			countTokens(request.model, original, token),
@@ -69,21 +87,24 @@ const handler: vscode.ChatRequestHandler = async (
 				`(${sign} ${approx}${Math.abs(saved)}, ${Math.abs(pct)}%)  \n` +
 				`**Model:** ${request.model.name}  \n` +
 				(applied.length
-					? `**Applied:** ${applied.join(', ')}\n\n`
-					: '_No changes were needed._\n\n'),
+					? `**Applied:** ${applied.join(', ')}  \n`
+					: '_No changes were needed._  \n') +
+				(brevity
+					? '**Response brevity:** on — asked the model for a shorter answer to cut output tokens.\n\n'
+					: '\n'),
 		);
 	}
 
 	if (!opts.forwardToModel) {
 		stream.markdown('**Optimized prompt:**\n');
-		stream.markdown('```text\n' + optimized + '\n```');
+		stream.markdown('```text\n' + promptToSend + '\n```');
 		return;
 	}
 
 	stream.markdown('---\n\n');
 
 	try {
-		const messages = [vscode.LanguageModelChatMessage.User(optimized)];
+		const messages = [vscode.LanguageModelChatMessage.User(promptToSend)];
 		const response = await request.model.sendRequest(messages, {}, token);
 		for await (const fragment of response.text) {
 			stream.markdown(fragment);

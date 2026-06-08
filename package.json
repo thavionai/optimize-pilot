@@ -2,7 +2,7 @@
   "name": "optimize-pilot",
   "displayName": "Optimize Pilot",
   "description": "Compress your Copilot Chat prompts to save tokens before they are sent to the selected model.",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "publisher": "thavionai",
   "license": "MIT",
   "repository": {
@@ -57,6 +57,16 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Contract two-word phrases to save tokens (e.g. *do not* → *don't*, *it is* → *it's*)."
+        },
+        "promptOptimizer.responseBrevity": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Append a short instruction asking the model to answer concisely. This reduces **output** tokens (usually the bulk of a chat's cost), unlike prompt compression which only trims input."
+        },
+        "promptOptimizer.brevityInstruction": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Custom text used when `#promptOptimizer.responseBrevity#` is on. Leave empty to use the built-in instruction (\"Be concise: answer directly with no preamble…\")."
         },
         "promptOptimizer.forwardToModel": {
           "type": "boolean",

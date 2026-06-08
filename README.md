@@ -67,8 +67,18 @@ Request preambles like *"could you"* are only removed at the start of a sentence
 | `promptOptimizer.removeFillerWords` | `true` | Remove politeness/preamble words. |
 | `promptOptimizer.simplifyVerbosePhrases` | `true` | Replace wordy phrases with shorter equivalents. |
 | `promptOptimizer.contractions` | `true` | Contract two-word phrases (e.g. `do not` → `don't`, `it is` → `it's`). |
+| `promptOptimizer.responseBrevity` | `false` | Append a short "be concise" instruction to the forwarded prompt. Cuts **output** tokens (usually the bulk of the cost), unlike compression which only trims input. |
+| `promptOptimizer.brevityInstruction` | `""` | Custom brevity text; empty uses the built-in instruction. |
 | `promptOptimizer.forwardToModel` | `true` | Send the optimized prompt to the model and stream the answer. When `false`, only the optimized prompt is shown. |
 | `promptOptimizer.showSavings` | `true` | Show before/after token counts and percentage saved. |
+
+## Input vs. output tokens
+
+Prompt compression only trims your **input**. In a typical chat, the model's
+**output** is the bulk of the token cost — and no prompt optimizer can shrink
+that. To cut output tokens, enable **`promptOptimizer.responseBrevity`**, which
+appends a short "answer concisely" instruction to the forwarded prompt. That
+single line usually saves far more than input compression.
 
 ## Requirements
 
