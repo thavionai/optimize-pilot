@@ -108,6 +108,40 @@ const VERBOSE_PHRASES: ReadonlyArray<readonly [RegExp, string]> = [
 	[/\bcompletely eliminate\b/gi, 'eliminate'],
 	[/\babsolutely essential\b/gi, 'essential'],
 	[/\bbasic fundamentals\b/gi, 'fundamentals'],
+	// de-nominalizations (verb buried in a noun phrase -> the verb)
+	[/\bcome to the conclusion that\b/gi, 'conclude that'],
+	[/\bgive consideration to\b/gi, 'consider'],
+	[/\b(?:provide|give) an explanation (?:of|for)\b/gi, 'explain'],
+	[/\bmake a decision\b/gi, 'decide'],
+	[/\bmake an assumption\b/gi, 'assume'],
+	[/\bmake a recommendation\b/gi, 'recommend'],
+	[/\b(?:perform|conduct|carry out) an analysis of\b/gi, 'analyze'],
+	[/\bis dependent (?:on|upon)\b/gi, 'depends on'],
+	[/\bare dependent (?:on|upon)\b/gi, 'depend on'],
+	[/\bis indicative of\b/gi, 'indicates'],
+	[/\bis representative of\b/gi, 'represents'],
+	[/\bis reflective of\b/gi, 'reflects'],
+	// purpose / manner
+	[/\bin an (?:effort|attempt) to\b/gi, 'to'],
+	[/\bto be able to\b/gi, 'to'],
+	[/\bin such a way that\b/gi, 'so that'],
+	[/\bthe (?:way|manner) in which\b/gi, 'how'],
+	[/\bthe extent to which\b/gi, 'how much'],
+	// reference / relation
+	[/\bin regards? to\b/gi, 'regarding'],
+	[/\bas regards\b/gi, 'regarding'],
+	[/\bpertaining to\b/gi, 'about'],
+	// quantity / frequency
+	[/\bfor the most part\b/gi, 'mostly'],
+	[/\bmore often than not\b/gi, 'usually'],
+	[/\bin the vast majority of cases\b/gi, 'usually'],
+	[/\ba wide range of\b/gi, 'many'],
+	[/\ba (?:wide )?variety of\b/gi, 'various'],
+	[/\ba total of\b/gi, ''],
+	[/\b(all|both|half) of the\b/gi, '$1 the'],
+	// time
+	[/\bat (?:this juncture|this moment in time)\b/gi, 'now'],
+	[/\bin spite of\b/gi, 'despite'],
 	// connectives / generic (run after the specifics above)
 	[/\bas well as\b/gi, 'and'],
 	[/\bin addition to\b/gi, 'besides'],
@@ -134,7 +168,20 @@ const FILLER_NOISE: ReadonlyArray<RegExp> = [
 	/\b(?:to be honest|in all honesty|honestly speaking)\b/gi,
 	/\bfeel free to\b/gi,
 	/\bgo ahead and\b/gi,
+	/\bthe bottom line is\b/gi,
+	/\bit is worth mentioning that\b/gi,
+	/\bas (?:previously |earlier )?(?:mentioned|stated|noted)(?: (?:above|earlier|previously))?\b/gi,
+	/\bfor all intents and purposes\b/gi,
+	/\b(?:in a nutshell|to put it simply|simply put|in short)\b/gi,
+	/\b(?:that being said|having said that|with that said|that said)\b/gi,
 	/\b(?:basically|actually|essentially|simply|obviously|clearly|literally)\b/gi,
+];
+
+// Hedges and empty intensifiers — soften or pad without adding instruction.
+// Grouped separately so they're easy to reason about; removed with filler words.
+const HEDGES: ReadonlyArray<RegExp> = [
+	/\b(?:kind of|sort of|more or less|pretty much|to some extent|in a sense|so to speak|if you will)\b/gi,
+	/\b(?:really|very|quite|rather|somewhat|fairly|truly|genuinely)\b/gi,
 ];
 
 // Pure politeness — always safe to drop anywhere.
@@ -142,7 +189,8 @@ const POLITENESS: ReadonlyArray<RegExp> = [
 	/\bplease\b/gi,
 	/\bkindly\b/gi,
 	/\bif (?:it'?s |it is )?possible\b/gi,
-	/\bif you don'?t mind\b/gi,
+	/\bif you (?:don'?t mind|would be so kind)\b/gi,
+	/\b(?:when you (?:get|have) (?:a|the) chance|at your earliest convenience)\b/gi,
 	/\b(?:thank you|thanks)(?: (?:very much|so much|a lot|in advance))?[.!]?/gi,
 ];
 
@@ -221,6 +269,9 @@ export function optimizePrompt(
 	if (options.removeFillerWords) {
 		const before = out;
 		for (const re of FILLER_NOISE) {
+			out = out.replace(re, '');
+		}
+		for (const re of HEDGES) {
 			out = out.replace(re, '');
 		}
 		for (const re of POLITENESS) {

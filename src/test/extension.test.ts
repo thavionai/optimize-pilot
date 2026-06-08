@@ -72,6 +72,35 @@ suite('optimizePrompt', () => {
 		);
 	});
 
+	test('de-nominalizes buried verbs', () => {
+		assert.strictEqual(
+			optimizePrompt('Please make a decision and provide an explanation for the result.').optimized,
+			'decide and explain the result.',
+		);
+		assert.strictEqual(
+			optimizePrompt('The output is dependent on a wide variety of factors.').optimized,
+			'The output depends on various factors.',
+		);
+	});
+
+	test('reduces all/both/half of the and a total of', () => {
+		assert.strictEqual(
+			optimizePrompt('Refactor all of the modules in such a way that they pass.').optimized,
+			'Refactor all the modules so that they pass.',
+		);
+		assert.strictEqual(
+			optimizePrompt('Add a total of 5 retries.').optimized,
+			'Add 5 retries.',
+		);
+	});
+
+	test('removes hedges and empty intensifiers', () => {
+		assert.strictEqual(
+			optimizePrompt('This is a very really quite fragile module.').optimized,
+			'This is a fragile module.',
+		);
+	});
+
 	test('strips orphaned leading punctuation after removal', () => {
 		assert.strictEqual(
 			optimizePrompt('If possible, refactor this.').optimized,

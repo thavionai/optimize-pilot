@@ -2,6 +2,11 @@
 
 All notable changes to the "prompt-optimizer" extension will be documented in this file.
 
+## [0.0.5]
+
+- More optimization rules: de-nominalizations (*make a decision* → *decide*, *provide an explanation for* → *explain*, *is dependent on* → *depends on*, *come to the conclusion that* → *conclude that*), more synonym swaps (*the way in which* → *how*, *a wide variety of* → *various*, *all of the* → *all the*, *a total of* → removed, *in spite of* → *despite*, *in regards to* → *regarding*), more filler removal (*the bottom line is*, *as previously mentioned*, *that being said*, *for all intents and purposes*), more politeness (*at your earliest convenience*, *when you get a chance*).
+- New "hedges" group removes empty intensifiers (*very*, *really*, *quite*, *kind of*, *sort of*, *pretty much*) under the `removeFillerWords` setting.
+
 ## [0.0.4]
 
 - Renamed the extension identifier to `optimize-pilot` (the Marketplace requires globally-unique names and `prompt-optimizer` was taken). The display name stays "Prompt Optimizer". Install with `thavionai.optimize-pilot`.
