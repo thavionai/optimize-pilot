@@ -1,6 +1,6 @@
 # Prompt Optimizer
 
-[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/thavionai.prompt-optimizer?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=thavionai.prompt-optimizer)
+[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/thavionai.optimize-pilot?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=thavionai.optimize-pilot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 A VS Code extension that **compresses your Copilot Chat prompts to save tokens** before they are sent to the model you selected — without changing what you mean.
@@ -8,20 +8,20 @@ A VS Code extension that **compresses your Copilot Chat prompts to save tokens**
 It registers a chat participant, `@optimize`, in the Copilot Chat panel. You type your prompt, it strips away the parts that cost tokens but carry no instruction, shows you how much it saved, and forwards the slimmed-down prompt to the model picked in the chat model dropdown.
 
 - **Repository:** https://github.com/thavionai/prompt-optimizer
-- **Marketplace:** https://marketplace.visualstudio.com/items?itemName=thavionai.prompt-optimizer
+- **Marketplace:** https://marketplace.visualstudio.com/items?itemName=thavionai.optimize-pilot
 
 ## Install
 
 **From the Marketplace** — search for *Prompt Optimizer* in the Extensions view (`Cmd/Ctrl+Shift+X`), or:
 
 ```bash
-code --install-extension thavionai.prompt-optimizer
+code --install-extension thavionai.optimize-pilot
 ```
 
-**From a `.vsix`** — download `prompt-optimizer-<version>.vsix` and:
+**From a `.vsix`** — download `optimize-pilot-<version>.vsix` and:
 
 ```bash
-code --install-extension prompt-optimizer-0.0.1.vsix
+code --install-extension optimize-pilot-0.0.4.vsix
 ```
 
 ## How it works
@@ -70,7 +70,7 @@ Request preambles like *"could you"* are only removed at the start of a sentence
 
 ## Requirements
 
-- VS Code `1.120.0` or newer.
+- VS Code `1.96.0` or newer.
 - GitHub Copilot Chat (or any extension that provides language models via `vscode.lm`).
 
 ## Development

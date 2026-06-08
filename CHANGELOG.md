@@ -2,6 +2,10 @@
 
 All notable changes to the "prompt-optimizer" extension will be documented in this file.
 
+## [0.0.4]
+
+- Renamed the extension identifier to `optimize-pilot` (the Marketplace requires globally-unique names and `prompt-optimizer` was taken). The display name stays "Prompt Optimizer". Install with `thavionai.optimize-pilot`.
+
 ## [0.0.3]
 
 - Greatly expanded the rule set: ~60 verbose-phrase reductions (e.g. *is able to* → *can*, *take into account* → *consider*, *on a daily basis* → *daily*, *whether or not* → *whether*), more filler/noise removal (*it is worth noting that*, *feel free to*, *obviously*), more politeness patterns (*if possible*, *if you don't mind*), and more first-person framing (*I'm looking to*, *what I would like you to do is*).
