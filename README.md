@@ -5,7 +5,16 @@
 
 A VS Code extension that **compresses your Copilot Chat prompts to save tokens** before they are sent to the model you selected — without changing what you mean.
 
-It registers a chat participant, `@optimize`, in the Copilot Chat panel. You type your prompt, it strips away the parts that cost tokens but carry no instruction, shows you how much it saved, and forwards the slimmed-down prompt to the model picked in the chat model dropdown.
+It registers a chat participant, `@optimize`, in the Copilot Chat panel. You type your prompt, it strips away the parts that cost tokens but carry no instruction, shows you how much it saved, and forwards the slimmed-down prompt — together with any files you attached — to the model picked in the chat model dropdown.
+
+## Features
+
+- **Deterministic compression** — ~120 meaning-preserving rules (verbose phrases, filler/politeness, hedges, request framing) plus contractions. Local, instant, and free; never touches code.
+- **Token savings, shown** — before/after counts and % saved, using the selected model's own tokenizer.
+- **Attachments** — `#`-attached files are folded in: prose compressed, code preserved byte-for-byte.
+- **Response brevity** (opt-in) — appends a "be concise" instruction to cut the model's *output* tokens, which usually dominate cost.
+- **Fully configurable** — every rule group and behavior toggles via `promptOptimizer.*` settings.
+- **Also a Claude Code plugin** — the same engine as a `/optimize` command + `optimize_prompt` MCP tool.
 
 - **Repository:** https://github.com/thavionai/optimize-pilot
 - **Marketplace:** https://marketplace.visualstudio.com/items?itemName=thavionai.optimize-pilot
@@ -18,10 +27,11 @@ It registers a chat participant, `@optimize`, in the Copilot Chat panel. You typ
 code --install-extension thavionai.optimize-pilot
 ```
 
-**From a `.vsix`** — download `optimize-pilot-<version>.vsix` and:
+**From a `.vsix`** — download `optimize-pilot-<version>.vsix` from the
+[releases page](https://github.com/thavionai/optimize-pilot/releases) and:
 
 ```bash
-code --install-extension optimize-pilot-0.0.4.vsix
+code --install-extension optimize-pilot-<version>.vsix
 ```
 
 ## How it works
