@@ -80,6 +80,28 @@ that. To cut output tokens, enable **`promptOptimizer.responseBrevity`**, which
 appends a short "answer concisely" instruction to the forwarded prompt. That
 single line usually saves far more than input compression.
 
+## Claude Code plugin
+
+This repo also ships a **Claude Code plugin** that reuses the same deterministic
+engine — useful for compressing text on demand (e.g. to paste into another LLM,
+a system prompt, or a doc). It does **not** intercept Claude Code's own prompts
+(the host can't rewrite them) and won't reduce your Claude Code token usage; it's
+a portable text-compressor.
+
+It provides:
+- **`/optimize <text>`** slash command — returns the compressed text + token-savings stats.
+- **`optimize_prompt`** MCP tool — Claude can call it to shrink text. Zero npm dependencies (a plain-stdio MCP server), so it runs immediately after install.
+
+Install via Claude Code's plugin marketplace:
+```
+/plugin marketplace add thavionai/optimize-pilot
+/plugin install optimize-pilot@thavionai
+```
+(or add `https://github.com/thavionai/optimize-pilot` in **Manage Plugins → Marketplaces**.)
+
+Plugin sources live in [`claude/`](./claude); the marketplace manifest is
+[`.claude-plugin/marketplace.json`](./.claude-plugin/marketplace.json).
+
 ## Requirements
 
 - VS Code `1.96.0` or newer.

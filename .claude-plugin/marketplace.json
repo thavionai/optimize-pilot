@@ -1,0 +1,16 @@
+{
+  "name": "thavionai",
+  "owner": { "name": "thavionai" },
+  "metadata": {
+    "description": "thavionai Claude Code plugins",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "optimize-pilot",
+      "source": "./claude",
+      "description": "Deterministic prompt/text compressor — /optimize command + optimize_prompt MCP tool. ~120 rules plus contractions, zero token cost, code-safe.",
+      "version": "0.1.0"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "optimize-pilot",
+  "description": "Deterministic prompt/text compressor — /optimize command + optimize_prompt MCP tool. ~120 rules plus contractions, zero token cost, code-safe.",
+  "version": "0.1.0",
+  "author": { "name": "thavionai" },
+  "homepage": "https://github.com/thavionai/optimize-pilot",
+  "license": "MIT"
+}
