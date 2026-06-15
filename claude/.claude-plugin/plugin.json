@@ -1,7 +1,7 @@
 {
   "name": "optimize-pilot",
-  "description": "Deterministic prompt/text compressor — /optimize command + optimize_prompt MCP tool. ~120 rules plus contractions, zero token cost, code-safe.",
-  "version": "0.1.0",
+  "description": "Deterministic two-way token optimizer — compresses your prompts AND command output. Auto-compresses Bash output via a PostToolUse hook; /optimize, /discover, /optimize-stats commands + MCP tools. Zero token cost, code-safe, meaning-preserving.",
+  "version": "0.2.0",
   "author": { "name": "thavionai" },
   "homepage": "https://github.com/thavionai/optimize-pilot",
   "license": "MIT"

@@ -13,6 +13,20 @@ export interface OptimizerOptions {
 	simplifyVerbosePhrases: boolean;
 	/** Contract two-word phrases (e.g. "do not" -> "don't"). */
 	contractions: boolean;
+	/**
+	 * User-supplied rules applied alongside the built-ins, e.g. project jargon
+	 * or house phrasing. Each is `find` -> `replace`; `find` is treated as a
+	 * literal string unless `regex` is true. Always case-insensitive, global.
+	 */
+	customRules?: ReadonlyArray<CustomRule>;
+}
+
+/** A single user-defined compression rule (see {@link OptimizerOptions}). */
+export interface CustomRule {
+	find: string;
+	replace: string;
+	/** Treat `find` as a regular expression instead of a literal string. */
+	regex?: boolean;
 }
 
 export interface OptimizationResult {
@@ -331,6 +345,38 @@ function collapseWhitespace(s: string): string {
 		.trim();
 }
 
+/** Escape a string so it can be embedded literally in a RegExp. */
+function escapeRegExp(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Compile user rules into `[RegExp, replacement]` pairs. Invalid regexes are
+ * skipped (a bad custom rule must never break the whole optimizer), and
+ * literal rules are anchored on word boundaries when they look like words.
+ */
+export function compileCustomRules(
+	rules: ReadonlyArray<CustomRule> = [],
+): Array<[RegExp, string]> {
+	const compiled: Array<[RegExp, string]> = [];
+	for (const rule of rules) {
+		if (!rule || !rule.find) {
+			continue;
+		}
+		try {
+			const source = rule.regex
+				? rule.find
+				: /^\w[\s\S]*\w$|^\w$/.test(rule.find)
+					? `\\b${escapeRegExp(rule.find)}\\b`
+					: escapeRegExp(rule.find);
+			compiled.push([new RegExp(source, 'gi'), rule.replace ?? '']);
+		} catch {
+			// Malformed pattern -> ignore this rule, keep the rest.
+		}
+	}
+	return compiled;
+}
+
 /**
  * Compress `input` according to `options`, leaving code untouched.
  */
@@ -342,6 +388,17 @@ export function optimizePrompt(
 	const { masked, segments } = maskCode(input);
 	let out = masked;
 
+	const custom = compileCustomRules(options.customRules);
+	if (custom.length) {
+		const before = out;
+		for (const [re, rep] of custom) {
+			out = out.replace(re, rep);
+		}
+		if (out !== before) {
+			applied.push('custom rules');
+		}
+	}
+
 	if (options.simplifyVerbosePhrases) {
 		const before = out;
 		for (const [re, rep] of VERBOSE_PHRASES) {
@@ -352,16 +409,9 @@ export function optimizePrompt(
 		}
 	}
 
-	if (options.contractions) {
-		const before = out;
-		for (const [re, rep] of CONTRACTIONS) {
-			out = out.replace(re, rep);
-		}
-		if (out !== before) {
-			applied.push('contractions');
-		}
-	}
-
+	// Filler removal must run before contractions: several filler phrases begin
+	// with "it is" (e.g. "it is important to note that"), and contracting that
+	// to "it's" first would stop the filler rule from matching.
 	if (options.removeFillerWords) {
 		const before = out;
 		for (const re of FILLER_NOISE) {
@@ -384,10 +434,20 @@ export function optimizePrompt(
 		}
 	}
 
+	if (options.contractions) {
+		const before = out;
+		for (const [re, rep] of CONTRACTIONS) {
+			out = out.replace(re, rep);
+		}
+		if (out !== before) {
+			applied.push('contractions');
+		}
+	}
+
 	// Clean up artifacts left by deletions: double spaces, space-before-punctuation,
 	// a comma/semicolon swallowed by stronger punctuation, and orphaned leading
 	// punctuation (e.g. removing "if possible," from the start of a sentence).
-	if (options.removeFillerWords || options.simplifyVerbosePhrases) {
+	if (options.removeFillerWords || options.simplifyVerbosePhrases || custom.length) {
 		out = out
 			.replace(/[ \t]{2,}/g, ' ')
 			.replace(/([,;:])(?:\s*[,;:])+/g, '$1')
@@ -413,4 +473,185 @@ export function optimizePrompt(
 /** Rough fallback token estimate (~4 chars/token) when a model can't count. */
 export function estimateTokens(text: string): number {
 	return Math.ceil(text.length / 4);
+}
+
+// ---------------------------------------------------------------------------
+// Output compression
+//
+// The prose rules above shrink what you *send*. These shrink what tools *send
+// back* — the command output that lands in the model's context. Same contract:
+// deterministic, no model call, meaning-preserving. We never paraphrase a line;
+// we only drop pure noise, collapse exact repeats, and truncate the long middle
+// of oversized output (keeping head and tail, which is where the signal is).
+// ---------------------------------------------------------------------------
+
+export interface OutputCompressionOptions {
+	/** Collapse runs of identical lines into one annotated `… (×N)` line. */
+	dedupe: boolean;
+	/** Strip ANSI colour codes and pure progress/spinner noise. */
+	dropNoise: boolean;
+	/** Truncate to head+tail when the line count exceeds this. 0 = no limit. */
+	maxLines: number;
+	/** Lines to keep from the top when truncating. */
+	headLines: number;
+	/** Lines to keep from the bottom when truncating. */
+	tailLines: number;
+}
+
+export const DEFAULT_OUTPUT_OPTIONS: OutputCompressionOptions = {
+	dedupe: true,
+	dropNoise: true,
+	maxLines: 200,
+	headLines: 80,
+	tailLines: 80,
+};
+
+const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+// Lines that are pure progress / churn and carry no lasting signal.
+const NOISE_LINE = [
+	/^\s*[⠀-⣿▀-▟|/\\\-]+\s*$/, // spinner/braille/box-drawing only
+	/^\s*\d{1,3}%(\s|$)/, // leading percentage progress
+	/^\s*[#=>.\-]{3,}\s*\d*%?\s*$/, // ascii progress bars
+	/\r$/, // carriage-return progress fragments
+];
+
+export interface OutputCompressionResult {
+	compressed: string;
+	linesBefore: number;
+	linesAfter: number;
+}
+
+/**
+ * Compress raw command/tool output. Code/text is never paraphrased — only
+ * noise removal, exact-repeat collapsing, and middle truncation are applied.
+ */
+export function compressOutput(
+	input: string,
+	options: OutputCompressionOptions = DEFAULT_OUTPUT_OPTIONS,
+): OutputCompressionResult {
+	let text = input;
+	if (options.dropNoise) {
+		text = text.replace(ANSI, '').replace(/\r(?!\n)/g, '\n');
+	}
+
+	let lines = text.split('\n');
+	const linesBefore = lines.length;
+
+	if (options.dropNoise) {
+		lines = lines.filter((l) => !NOISE_LINE.some((re) => re.test(l)));
+	}
+
+	if (options.dedupe) {
+		const collapsed: string[] = [];
+		let i = 0;
+		while (i < lines.length) {
+			let n = 1;
+			while (i + n < lines.length && lines[i + n] === lines[i]) {
+				n++;
+			}
+			// Only annotate non-blank repeats; blank runs just collapse to one.
+			if (n > 1 && lines[i].trim()) {
+				collapsed.push(`${lines[i]}  … (×${n})`);
+			} else {
+				collapsed.push(lines[i]);
+			}
+			i += n;
+		}
+		lines = collapsed;
+	}
+
+	if (options.maxLines > 0 && lines.length > options.maxLines) {
+		const head = lines.slice(0, options.headLines);
+		const tail = lines.slice(lines.length - options.tailLines);
+		const hidden = lines.length - head.length - tail.length;
+		lines = [
+			...head,
+			`… (${hidden} line${hidden === 1 ? '' : 's'} hidden by optimize-pilot) …`,
+			...tail,
+		];
+	}
+
+	return {
+		compressed: lines.join('\n'),
+		linesBefore,
+		linesAfter: lines.length,
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Discover — a dry-run report attributing savings to each rule group, so you
+// can see where the tokens go without forwarding anything to a model.
+// ---------------------------------------------------------------------------
+
+export interface DiscoverGroup {
+	name: string;
+	/** Estimated tokens this group alone removes from the input. */
+	saved: number;
+}
+
+export interface DiscoverReport {
+	optimized: string;
+	estTokensBefore: number;
+	estTokensAfter: number;
+	saved: number;
+	percent: number;
+	applied: string[];
+	groups: DiscoverGroup[];
+}
+
+/**
+ * Run each enabled rule group in isolation to attribute savings, plus the full
+ * combined pass. Useful for a "what would this save, and why" preview.
+ */
+export function discover(
+	input: string,
+	options: OptimizerOptions = DEFAULT_OPTIONS,
+): DiscoverReport {
+	const base = estimateTokens(input);
+	const only = (
+		name: string,
+		patch: Partial<OptimizerOptions>,
+	): DiscoverGroup => {
+		const opts: OptimizerOptions = {
+			collapseWhitespace: false,
+			removeFillerWords: false,
+			simplifyVerbosePhrases: false,
+			contractions: false,
+			...patch,
+		};
+		const { optimized } = optimizePrompt(input, opts);
+		return { name, saved: base - estimateTokens(optimized) };
+	};
+
+	const groups: DiscoverGroup[] = [];
+	if (options.simplifyVerbosePhrases) {
+		groups.push(only('verbose phrases', { simplifyVerbosePhrases: true }));
+	}
+	if (options.removeFillerWords) {
+		groups.push(only('filler words', { removeFillerWords: true }));
+	}
+	if (options.contractions) {
+		groups.push(only('contractions', { contractions: true }));
+	}
+	if (options.collapseWhitespace) {
+		groups.push(only('whitespace', { collapseWhitespace: true }));
+	}
+	if (options.customRules && options.customRules.length) {
+		groups.push(
+			only('custom rules', { customRules: options.customRules }),
+		);
+	}
+
+	const { optimized, applied } = optimizePrompt(input, options);
+	const after = estimateTokens(optimized);
+	const saved = base - after;
+	return {
+		optimized,
+		estTokensBefore: base,
+		estTokensAfter: after,
+		saved,
+		percent: base > 0 ? Math.round((saved / base) * 100) : 0,
+		applied,
+		groups: groups.sort((a, b) => b.saved - a.saved),
+	};
 }

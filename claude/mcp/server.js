@@ -7,10 +7,16 @@
 //
 // IMPORTANT: only JSON-RPC messages go to stdout. Diagnostics go to stderr.
 
-const { optimizePrompt, estimateTokens } = require('./optimizer.js');
+const {
+	optimizePrompt,
+	estimateTokens,
+	compressOutput,
+	discover,
+} = require('./optimizer.js');
+const stats = require('./stats.js');
 
 const DEFAULT_PROTOCOL_VERSION = '2024-11-05';
-const SERVER_INFO = { name: 'optimize-pilot', version: '0.1.0' };
+const SERVER_INFO = { name: 'optimize-pilot', version: '0.2.0' };
 
 const TOOLS = [
 	{
@@ -30,6 +36,42 @@ const TOOLS = [
 			},
 			required: ['text'],
 		},
+	},
+	{
+		name: 'compress_output',
+		description:
+			'Compress raw command/log/tool output deterministically: strip ANSI & ' +
+			'progress noise, collapse exact-repeat lines into "… (×N)", and truncate ' +
+			'oversized output to head+tail. Never paraphrases a line. No model call. ' +
+			'Use on long command results to shrink what enters context.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				text: { type: 'string', description: 'Raw output to compress.' },
+			},
+			required: ['text'],
+		},
+	},
+	{
+		name: 'optimize_discover',
+		description:
+			'Dry-run report: show how many tokens compression would save and which ' +
+			'rule group accounts for each saving, WITHOUT forwarding anything to a ' +
+			'model. Returns the optimized text plus a per-group breakdown.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				text: { type: 'string', description: 'The text to analyze.' },
+			},
+			required: ['text'],
+		},
+	},
+	{
+		name: 'optimize_stats',
+		description:
+			'Report lifetime token savings across all prompt optimizations and ' +
+			'command-output compressions performed by optimize-pilot on this machine.',
+		inputSchema: { type: 'object', properties: {} },
 	},
 ];
 
@@ -54,6 +96,7 @@ function runOptimize(args) {
 		`~tokens ${before} → ${after} (saved ${saved}, ${pct}%) · ` +
 		`chars ${text.length} → ${optimized.length} · ` +
 		`applied: ${applied.length ? applied.join(', ') : 'none'}`;
+	stats.record('prompt', before, after);
 	return {
 		content: [{ type: 'text', text: `${optimized}\n\n---\n${summary}` }],
 		structuredContent: {
@@ -66,6 +109,60 @@ function runOptimize(args) {
 		},
 	};
 }
+
+function runCompress(args) {
+	const text = typeof args.text === 'string' ? args.text : String(args.text ?? '');
+	const { compressed, linesBefore, linesAfter } = compressOutput(text);
+	const before = estimateTokens(text);
+	const after = estimateTokens(compressed);
+	const saved = before - after;
+	const pct = before > 0 ? Math.round((saved / before) * 100) : 0;
+	const summary =
+		`~tokens ${before} → ${after} (saved ${saved}, ${pct}%) · ` +
+		`lines ${linesBefore} → ${linesAfter}`;
+	stats.record('output', before, after);
+	return {
+		content: [{ type: 'text', text: `${compressed}\n\n---\n${summary}` }],
+		structuredContent: {
+			compressed,
+			linesBefore,
+			linesAfter,
+			estTokensBefore: before,
+			estTokensAfter: after,
+			saved,
+			percent: pct,
+		},
+	};
+}
+
+function runDiscover(args) {
+	const text = typeof args.text === 'string' ? args.text : String(args.text ?? '');
+	const report = discover(text);
+	const lines = report.groups.map((g) => `  • ${g.name}: ~${g.saved} tokens`);
+	const summary =
+		`~tokens ${report.estTokensBefore} → ${report.estTokensAfter} ` +
+		`(saved ${report.saved}, ${report.percent}%)\n` +
+		(lines.length ? `Savings by rule group:\n${lines.join('\n')}` : 'No savings found.');
+	return {
+		content: [{ type: 'text', text: summary }],
+		structuredContent: report,
+	};
+}
+
+function runStats() {
+	const s = stats.read();
+	return {
+		content: [{ type: 'text', text: stats.summary(s) }],
+		structuredContent: s,
+	};
+}
+
+const HANDLERS = {
+	optimize_prompt: runOptimize,
+	compress_output: runCompress,
+	optimize_discover: runDiscover,
+	optimize_stats: runStats,
+};
 
 function handle(message) {
 	const { id, method, params } = message;
@@ -88,12 +185,13 @@ function handle(message) {
 			return;
 		case 'tools/call': {
 			const name = params && params.name;
-			if (name !== 'optimize_prompt') {
+			const fn = HANDLERS[name];
+			if (!fn) {
 				sendError(id, -32602, `Unknown tool: ${name}`);
 				return;
 			}
 			try {
-				sendResult(id, runOptimize((params && params.arguments) || {}));
+				sendResult(id, fn((params && params.arguments) || {}));
 			} catch (e) {
 				sendResult(id, {
 					content: [{ type: 'text', text: `Error: ${e && e.message ? e.message : e}` }],

@@ -3,6 +3,7 @@ import {
 	optimizePrompt,
 	estimateTokens,
 	OptimizerOptions,
+	CustomRule,
 } from './optimizer';
 import {
 	ResolvedAttachment,
@@ -28,19 +29,64 @@ function readOptions(): OptimizerOptions & {
 	responseBrevity: boolean;
 	brevityInstruction: string;
 	includeAttachments: boolean;
+	compressAttachmentLogs: boolean;
 } {
 	const cfg = vscode.workspace.getConfiguration('promptOptimizer');
+	const customRules = cfg
+		.get<CustomRule[]>('customRules', [])
+		.filter((r) => r && typeof r.find === 'string');
 	return {
 		collapseWhitespace: cfg.get('collapseWhitespace', true),
 		removeFillerWords: cfg.get('removeFillerWords', true),
 		simplifyVerbosePhrases: cfg.get('simplifyVerbosePhrases', true),
 		contractions: cfg.get('contractions', true),
+		customRules,
 		forwardToModel: cfg.get('forwardToModel', true),
 		showSavings: cfg.get('showSavings', true),
 		responseBrevity: cfg.get('responseBrevity', false),
 		brevityInstruction: cfg.get('brevityInstruction', '').trim(),
 		includeAttachments: cfg.get('includeAttachments', true),
+		compressAttachmentLogs: cfg.get('compressAttachmentLogs', true),
 	};
+}
+
+// --- Lifetime savings ------------------------------------------------------
+// Cumulative token savings, persisted in globalState (like RTK's `gain`).
+
+const STATS_KEY = 'promptOptimizer.lifetime';
+interface Lifetime {
+	prompts: number;
+	tokensBefore: number;
+	tokensAfter: number;
+}
+let memento: vscode.Memento | undefined;
+
+function recordSavings(before: number, after: number): void {
+	if (!memento || before <= 0) {
+		return;
+	}
+	const s = memento.get<Lifetime>(STATS_KEY, {
+		prompts: 0,
+		tokensBefore: 0,
+		tokensAfter: 0,
+	});
+	s.prompts += 1;
+	s.tokensBefore += before;
+	s.tokensAfter += after;
+	void memento.update(STATS_KEY, s);
+}
+
+function lifetimeSummary(): string {
+	const s = memento?.get<Lifetime>(STATS_KEY);
+	if (!s || s.prompts === 0) {
+		return 'Optimize Pilot: no prompts optimized yet.';
+	}
+	const saved = s.tokensBefore - s.tokensAfter;
+	const pct = s.tokensBefore > 0 ? Math.round((saved / s.tokensBefore) * 100) : 0;
+	return (
+		`Optimize Pilot lifetime: ${s.prompts} prompt(s) · ` +
+		`${s.tokensBefore} → ${s.tokensAfter} tokens (saved ${saved}, ${pct}%)`
+	);
 }
 
 /** Decode a file to text, skipping oversized or binary content. */
@@ -129,12 +175,18 @@ const handler: vscode.ChatRequestHandler = async (
 	let procAtts: ProcessedAttachment[] = [];
 	if (opts.includeAttachments && request.references?.length) {
 		rawAtts = await resolveAttachments(request.references);
-		procAtts = rawAtts.map((a) => processAttachment(a, opts));
+		procAtts = rawAtts.map((a) =>
+			processAttachment(a, opts, opts.compressAttachmentLogs),
+		);
 	}
 
 	const beforeBundle = formatBundle(
 		original,
-		rawAtts.map((a) => ({ name: a.name, content: a.content, prose: false })),
+		rawAtts.map((a) => ({
+			name: a.name,
+			content: a.content,
+			mode: 'preserved' as const,
+		})),
 	);
 	const afterBundle = formatBundle(optimized, procAtts);
 
@@ -146,16 +198,21 @@ const handler: vscode.ChatRequestHandler = async (
 		: '';
 	const promptToSend = brevity ? `${afterBundle}\n\n${brevity}` : afterBundle;
 
+	// Always measure (for lifetime tracking); only render when showSavings is on.
+	const [before, after] = await Promise.all([
+		countTokens(request.model, beforeBundle, token),
+		countTokens(request.model, afterBundle, token),
+	]);
+	recordSavings(before.count, after.count);
+
 	if (opts.showSavings) {
-		const [before, after] = await Promise.all([
-			countTokens(request.model, beforeBundle, token),
-			countTokens(request.model, afterBundle, token),
-		]);
 		const saved = before.count - after.count;
 		const pct = before.count > 0 ? Math.round((saved / before.count) * 100) : 0;
 		const approx = before.exact && after.exact ? '' : '~';
 		const sign = saved >= 0 ? 'saved' : 'added';
-		const compressed = procAtts.filter((a) => a.prose).length;
+		const proseN = procAtts.filter((a) => a.mode === 'prose').length;
+		const logN = procAtts.filter((a) => a.mode === 'output').length;
+		const keptN = procAtts.filter((a) => a.mode === 'preserved').length;
 
 		stream.markdown(
 			`**Tokens:** ${approx}${before.count} → ${approx}${after.count} ` +
@@ -166,7 +223,7 @@ const handler: vscode.ChatRequestHandler = async (
 					: '_No changes were needed._  \n') +
 				(procAtts.length
 					? `**Attachments:** ${procAtts.length} included ` +
-						`(${compressed} prose compressed, ${procAtts.length - compressed} code preserved)  \n`
+						`(${proseN} prose compressed, ${logN} log compressed, ${keptN} code preserved)  \n`
 					: '') +
 				(brevity
 					? '**Response brevity:** on — asked the model for a shorter answer to cut output tokens.\n\n'
@@ -180,9 +237,10 @@ const handler: vscode.ChatRequestHandler = async (
 			'```text\n' + (brevity ? `${optimized}\n\n${brevity}` : optimized) + '\n```',
 		);
 		if (procAtts.length) {
+			const compressedN = procAtts.filter((a) => a.mode !== 'preserved').length;
 			stream.markdown(
 				`\n\n_+ ${procAtts.length} attachment(s) would be forwarded ` +
-					`(${procAtts.filter((a) => a.prose).length} compressed, the rest preserved)._`,
+					`(${compressedN} compressed, the rest preserved)._`,
 			);
 		}
 		return;
@@ -210,9 +268,17 @@ const handler: vscode.ChatRequestHandler = async (
 };
 
 export function activate(context: vscode.ExtensionContext) {
+	memento = context.globalState;
+
 	const participant = vscode.chat.createChatParticipant(PARTICIPANT_ID, handler);
 	participant.iconPath = new vscode.ThemeIcon('rocket');
 	context.subscriptions.push(participant);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('promptOptimizer.showStats', () => {
+			void vscode.window.showInformationMessage(lifetimeSummary());
+		}),
+	);
 }
 
 export function deactivate() {}

@@ -21,6 +21,10 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var optimizer_exports = {};
 __export(optimizer_exports, {
   DEFAULT_OPTIONS: () => DEFAULT_OPTIONS,
+  DEFAULT_OUTPUT_OPTIONS: () => DEFAULT_OUTPUT_OPTIONS,
+  compileCustomRules: () => compileCustomRules,
+  compressOutput: () => compressOutput,
+  discover: () => discover,
   estimateTokens: () => estimateTokens,
   optimizePrompt: () => optimizePrompt
 });
@@ -299,10 +303,37 @@ function restoreCode(text, segments) {
 function collapseWhitespace(s) {
   return s.replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function compileCustomRules(rules = []) {
+  const compiled = [];
+  for (const rule of rules) {
+    if (!rule || !rule.find) {
+      continue;
+    }
+    try {
+      const source = rule.regex ? rule.find : /^\w[\s\S]*\w$|^\w$/.test(rule.find) ? `\\b${escapeRegExp(rule.find)}\\b` : escapeRegExp(rule.find);
+      compiled.push([new RegExp(source, "gi"), rule.replace ?? ""]);
+    } catch {
+    }
+  }
+  return compiled;
+}
 function optimizePrompt(input, options = DEFAULT_OPTIONS) {
   const applied = [];
   const { masked, segments } = maskCode(input);
   let out = masked;
+  const custom = compileCustomRules(options.customRules);
+  if (custom.length) {
+    const before = out;
+    for (const [re, rep] of custom) {
+      out = out.replace(re, rep);
+    }
+    if (out !== before) {
+      applied.push("custom rules");
+    }
+  }
   if (options.simplifyVerbosePhrases) {
     const before = out;
     for (const [re, rep] of VERBOSE_PHRASES) {
@@ -310,15 +341,6 @@ function optimizePrompt(input, options = DEFAULT_OPTIONS) {
     }
     if (out !== before) {
       applied.push("verbose phrases");
-    }
-  }
-  if (options.contractions) {
-    const before = out;
-    for (const [re, rep] of CONTRACTIONS) {
-      out = out.replace(re, rep);
-    }
-    if (out !== before) {
-      applied.push("contractions");
     }
   }
   if (options.removeFillerWords) {
@@ -342,7 +364,16 @@ function optimizePrompt(input, options = DEFAULT_OPTIONS) {
       applied.push("filler words");
     }
   }
-  if (options.removeFillerWords || options.simplifyVerbosePhrases) {
+  if (options.contractions) {
+    const before = out;
+    for (const [re, rep] of CONTRACTIONS) {
+      out = out.replace(re, rep);
+    }
+    if (out !== before) {
+      applied.push("contractions");
+    }
+  }
+  if (options.removeFillerWords || options.simplifyVerbosePhrases || custom.length) {
     out = out.replace(/[ \t]{2,}/g, " ").replace(/([,;:])(?:\s*[,;:])+/g, "$1").replace(/ +([.,;:!?])/g, "$1").replace(/([,;:]) *([.!?])/g, "$2").replace(/^[ \t,;:]+/, "").replace(/\n[ \t,;:]+/g, "\n");
   }
   if (options.collapseWhitespace) {
@@ -359,9 +390,118 @@ function optimizePrompt(input, options = DEFAULT_OPTIONS) {
 function estimateTokens(text) {
   return Math.ceil(text.length / 4);
 }
+var DEFAULT_OUTPUT_OPTIONS = {
+  dedupe: true,
+  dropNoise: true,
+  maxLines: 200,
+  headLines: 80,
+  tailLines: 80
+};
+var ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+var NOISE_LINE = [
+  /^\s*[⠀-⣿▀-▟|/\\\-]+\s*$/,
+  // spinner/braille/box-drawing only
+  /^\s*\d{1,3}%(\s|$)/,
+  // leading percentage progress
+  /^\s*[#=>.\-]{3,}\s*\d*%?\s*$/,
+  // ascii progress bars
+  /\r$/
+  // carriage-return progress fragments
+];
+function compressOutput(input, options = DEFAULT_OUTPUT_OPTIONS) {
+  let text = input;
+  if (options.dropNoise) {
+    text = text.replace(ANSI, "").replace(/\r(?!\n)/g, "\n");
+  }
+  let lines = text.split("\n");
+  const linesBefore = lines.length;
+  if (options.dropNoise) {
+    lines = lines.filter((l) => !NOISE_LINE.some((re) => re.test(l)));
+  }
+  if (options.dedupe) {
+    const collapsed = [];
+    let i = 0;
+    while (i < lines.length) {
+      let n = 1;
+      while (i + n < lines.length && lines[i + n] === lines[i]) {
+        n++;
+      }
+      if (n > 1 && lines[i].trim()) {
+        collapsed.push(`${lines[i]}  \u2026 (\xD7${n})`);
+      } else {
+        collapsed.push(lines[i]);
+      }
+      i += n;
+    }
+    lines = collapsed;
+  }
+  if (options.maxLines > 0 && lines.length > options.maxLines) {
+    const head = lines.slice(0, options.headLines);
+    const tail = lines.slice(lines.length - options.tailLines);
+    const hidden = lines.length - head.length - tail.length;
+    lines = [
+      ...head,
+      `\u2026 (${hidden} line${hidden === 1 ? "" : "s"} hidden by optimize-pilot) \u2026`,
+      ...tail
+    ];
+  }
+  return {
+    compressed: lines.join("\n"),
+    linesBefore,
+    linesAfter: lines.length
+  };
+}
+function discover(input, options = DEFAULT_OPTIONS) {
+  const base = estimateTokens(input);
+  const only = (name, patch) => {
+    const opts = {
+      collapseWhitespace: false,
+      removeFillerWords: false,
+      simplifyVerbosePhrases: false,
+      contractions: false,
+      ...patch
+    };
+    const { optimized: optimized2 } = optimizePrompt(input, opts);
+    return { name, saved: base - estimateTokens(optimized2) };
+  };
+  const groups = [];
+  if (options.simplifyVerbosePhrases) {
+    groups.push(only("verbose phrases", { simplifyVerbosePhrases: true }));
+  }
+  if (options.removeFillerWords) {
+    groups.push(only("filler words", { removeFillerWords: true }));
+  }
+  if (options.contractions) {
+    groups.push(only("contractions", { contractions: true }));
+  }
+  if (options.collapseWhitespace) {
+    groups.push(only("whitespace", { collapseWhitespace: true }));
+  }
+  if (options.customRules && options.customRules.length) {
+    groups.push(
+      only("custom rules", { customRules: options.customRules })
+    );
+  }
+  const { optimized, applied } = optimizePrompt(input, options);
+  const after = estimateTokens(optimized);
+  const saved = base - after;
+  return {
+    optimized,
+    estTokensBefore: base,
+    estTokensAfter: after,
+    saved,
+    percent: base > 0 ? Math.round(saved / base * 100) : 0,
+    applied,
+    groups: groups.sort((a, b) => b.saved - a.saved)
+  };
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   DEFAULT_OPTIONS,
+  DEFAULT_OUTPUT_OPTIONS,
+  compileCustomRules,
+  compressOutput,
+  discover,
   estimateTokens,
   optimizePrompt
 });

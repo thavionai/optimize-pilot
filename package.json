@@ -1,8 +1,8 @@
 {
   "name": "optimize-pilot",
   "displayName": "Optimize Pilot",
-  "description": "Compress your Copilot Chat prompts to save tokens before they are sent to the selected model.",
-  "version": "0.0.9",
+  "description": "Compress your Copilot Chat prompts and command output to save tokens — meaning-preserving, code-safe, no model call.",
+  "version": "0.1.0",
   "publisher": "thavionai",
   "license": "MIT",
   "repository": {
@@ -82,9 +82,34 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Show before/after token counts and the percentage saved."
+        },
+        "promptOptimizer.compressAttachmentLogs": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "For `.log` attachments (and oversized `.txt`), apply output compression — strip ANSI/progress noise, collapse exact-repeat lines into `… (×N)`, and truncate to head+tail. Code, JSON and YAML are still preserved byte-for-byte."
+        },
+        "promptOptimizer.customRules": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Your own compression rules, applied alongside the built-ins. Each `find` is a literal phrase (case-insensitive) unless `regex` is true. Example: `[{\"find\": \"as soon as possible\", \"replace\": \"ASAP\"}]`.",
+          "items": {
+            "type": "object",
+            "required": ["find", "replace"],
+            "properties": {
+              "find": { "type": "string", "description": "Phrase or pattern to match." },
+              "replace": { "type": "string", "description": "Replacement text (may be empty to delete)." },
+              "regex": { "type": "boolean", "default": false, "description": "Treat `find` as a regular expression." }
+            }
+          }
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "promptOptimizer.showStats",
+        "title": "Optimize Pilot: Show Lifetime Token Savings"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

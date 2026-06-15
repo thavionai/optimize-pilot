@@ -1,6 +1,13 @@
 import * as assert from 'assert';
-import { optimizePrompt, estimateTokens, DEFAULT_OPTIONS } from '../optimizer';
-import { isProse, processAttachment, formatBundle } from '../attachments';
+import {
+	optimizePrompt,
+	estimateTokens,
+	DEFAULT_OPTIONS,
+	compressOutput,
+	discover,
+	compileCustomRules,
+} from '../optimizer';
+import { isProse, isLog, processAttachment, formatBundle } from '../attachments';
 
 suite('optimizePrompt', () => {
 	test('collapses whitespace and trims', () => {
@@ -197,13 +204,78 @@ suite('optimizePrompt', () => {
 	});
 });
 
+suite('customRules', () => {
+	test('applies a literal user rule on word boundaries', () => {
+		const { optimized, applied } = optimizePrompt('do it as soon as possible', {
+			...DEFAULT_OPTIONS,
+			customRules: [{ find: 'as soon as possible', replace: 'ASAP' }],
+		});
+		assert.strictEqual(optimized, 'do it ASAP');
+		assert.ok(applied.includes('custom rules'));
+	});
+
+	test('ignores a malformed regex rule without throwing', () => {
+		const rules = compileCustomRules([{ find: '(', replace: 'x', regex: true }]);
+		assert.strictEqual(rules.length, 0);
+	});
+
+	test('never touches code spans', () => {
+		const { optimized } = optimizePrompt('use `as soon as possible` here', {
+			...DEFAULT_OPTIONS,
+			customRules: [{ find: 'as soon as possible', replace: 'ASAP' }],
+		});
+		assert.ok(optimized.includes('`as soon as possible`'));
+	});
+});
+
+suite('compressOutput', () => {
+	test('collapses exact-repeat lines with a count', () => {
+		const { compressed } = compressOutput('err\nerr\nerr\nok');
+		assert.ok(compressed.includes('(×3)'), compressed);
+		assert.ok(compressed.includes('ok'));
+	});
+
+	test('truncates oversized output to head + tail', () => {
+		const lines = Array.from({ length: 500 }, (_, i) => `line ${i}`).join('\n');
+		const { compressed, linesBefore } = compressOutput(lines);
+		assert.strictEqual(linesBefore, 500);
+		assert.ok(compressed.includes('hidden by optimize-pilot'));
+		assert.ok(compressed.includes('line 0'));
+		assert.ok(compressed.includes('line 499'));
+	});
+
+	test('strips ANSI colour codes', () => {
+		const { compressed } = compressOutput('\x1b[31mred\x1b[0m line');
+		assert.strictEqual(compressed, 'red line');
+	});
+});
+
+suite('discover', () => {
+	test('reports per-group savings and totals', () => {
+		const r = discover('Could you please write a function in order to parse it?');
+		assert.ok(r.saved > 0);
+		assert.ok(r.estTokensAfter < r.estTokensBefore);
+		assert.ok(r.groups.length > 0);
+	});
+});
+
 suite('attachments', () => {
-	test('classifies prose vs code by extension', () => {
+	test('classifies prose vs code vs log by extension', () => {
 		assert.ok(isProse('README.md'));
 		assert.ok(isProse('notes.txt'));
+		assert.ok(isLog('build.log'));
 		assert.ok(!isProse('server.ts'));
 		assert.ok(!isProse('config.yaml'));
 		assert.ok(!isProse('Dockerfile')); // no extension -> preserve
+	});
+
+	test('compresses log attachments with output compression', () => {
+		const a = processAttachment({
+			name: 'build.log',
+			content: 'warn\nwarn\nwarn\nwarn\ndone',
+		});
+		assert.strictEqual(a.mode, 'output');
+		assert.ok(a.content.includes('(×4)'));
 	});
 
 	test('compresses prose attachments', () => {
@@ -211,20 +283,20 @@ suite('attachments', () => {
 			name: 'doc.md',
 			content: 'Please do not change it; I would like you to review it.',
 		});
-		assert.ok(a.prose);
+		assert.strictEqual(a.mode, 'prose');
 		assert.strictEqual(a.content, "don't change it; review it.");
 	});
 
 	test('preserves code attachments byte-for-byte', () => {
 		const code = 'def  f( x ):\n    return   x  # please keep';
 		const a = processAttachment({ name: 'a.py', content: code });
-		assert.ok(!a.prose);
+		assert.strictEqual(a.mode, 'preserved');
 		assert.strictEqual(a.content, code);
 	});
 
 	test('formatBundle delimits attachments and drops empty prompt', () => {
 		const bundle = formatBundle('', [
-			{ name: 'a.py', content: 'x=1', prose: false },
+			{ name: 'a.py', content: 'x=1', mode: 'preserved' },
 		]);
 		assert.ok(bundle.startsWith('----- Attached file: a.py -----'));
 		assert.ok(bundle.includes('x=1'));

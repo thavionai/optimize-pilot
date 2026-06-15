@@ -2,6 +2,19 @@
 
 All notable changes to the "prompt-optimizer" extension will be documented in this file.
 
+## [0.1.0]
+
+A release inspired by [RTK](https://github.com/rtk-ai/rtk): optimize-pilot now works on **both ends** of the token pipeline — your prompts *and* command/tool output — while keeping the same deterministic, no-model-call, meaning-preserving contract.
+
+- **Output compression** — new `compressOutput` engine + `compress_output` MCP tool: strips ANSI/progress noise, collapses exact-repeat lines into `… (×N)`, and truncates oversized output to head+tail. Never paraphrases a line. Typical savings on noisy logs are 50–90%.
+- **Automatic Bash-output compression (Claude Code)** — a `PostToolUse` hook (`claude/hooks/`) compresses long command output *before it enters context*. The command runs untouched (exit codes/side effects unchanged); only the returned text is shrunk. Install once, no per-call invocation. (Prompt-text rewriting is *not* possible via hooks — neither Copilot Chat nor Claude Code expose an API for it — so input compression stays on the explicit `@optimize` / `/optimize` path.)
+- **Custom rules** (`promptOptimizer.customRules`) — add your own `find → replace` mappings (literal or regex) alongside the ~120 built-ins. Malformed regexes are skipped, not fatal.
+- **`/discover` command + `optimize_discover` MCP tool** — dry-run report showing tokens saved and which rule group accounts for each saving, with no model call.
+- **Lifetime savings** — VS Code command *"Show Lifetime Token Savings"* (globalState) and `/optimize-stats` + `optimize_stats` MCP tool (Claude Code), à la RTK's `gain`.
+- **Log attachments** (`promptOptimizer.compressAttachmentLogs`) — `.log`/`.out`/`.err` files now get output compression; code/JSON/YAML still preserved byte-for-byte.
+- **Standalone CLI** (`claude/cli.js`) — pipe anything: `noisy-cmd 2>&1 | node cli.js`, `node cli.js --prompt`, `node cli.js --discover`.
+- **Fix** — filler removal now runs *before* contractions, so phrases like *"it is important to note that"* are stripped (previously they slipped through as *"it's …"*).
+
 ## [0.0.9]
 
 - **Attachments support** (`promptOptimizer.includeAttachments`, on by default): files attached with `#` are now folded into the forwarded request (previously the participant dropped them). Prose files (`.md`, `.txt`, …) are compressed with the same engine; source code, JSON, YAML, etc. are preserved byte-for-byte. Token savings and the before/after counts now cover the whole bundle (prompt + attachments), where the real savings are. Binary and very large (>512 KB) files are skipped.

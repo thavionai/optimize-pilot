@@ -13,8 +13,32 @@ It registers a chat participant, `@optimize`, in the Copilot Chat panel. You typ
 - **Token savings, shown** — before/after counts and % saved, using the selected model's own tokenizer.
 - **Attachments** — `#`-attached files are folded in: prose compressed, code preserved byte-for-byte.
 - **Response brevity** (opt-in) — appends a "be concise" instruction to cut the model's *output* tokens, which usually dominate cost.
+- **Custom rules** — add your own `find → replace` mappings (literal or regex) via `promptOptimizer.customRules`, applied alongside the built-ins.
+- **Lifetime savings** — *"Optimize Pilot: Show Lifetime Token Savings"* command reports cumulative tokens saved across all your prompts.
 - **Fully configurable** — every rule group and behavior toggles via `promptOptimizer.*` settings.
-- **Also a Claude Code plugin** — the same engine as a `/optimize` command + `optimize_prompt` MCP tool.
+- **Also a Claude Code plugin** — the same engine, two-way: `/optimize` + `optimize_prompt` (prompt compression), automatic Bash-output compression via a `PostToolUse` hook, `/discover` (dry-run report), and `/optimize-stats` (lifetime savings).
+
+## Two-way compression: prompts *and* output
+
+optimize-pilot trims tokens on **both ends** of the pipeline — the same idea as
+[RTK](https://github.com/rtk-ai/rtk), with the same guarantees (deterministic,
+no model call, meaning-preserving, code-safe):
+
+| Direction | What it shrinks | Where it runs |
+|---|---|---|
+| **Input** | your typed prompt + attachments | `@optimize` (VS Code), `/optimize` & `optimize_prompt` (Claude Code) |
+| **Output** | command / tool / log results before they enter context | `compress_output` MCP tool, and a **`PostToolUse` Bash hook that runs automatically** in Claude Code |
+
+**Output compression** strips ANSI and progress noise, collapses exact-repeat
+lines into `… (×N)`, and truncates oversized output to head + tail — it never
+paraphrases a line. On noisy build logs this is typically a 50–90% reduction.
+
+> **Why input compression isn't automatic:** rewriting your *typed prompt* isn't
+> possible — neither Copilot Chat nor Claude Code's `UserPromptSubmit` hook
+> exposes an API to replace submitted text. So prompts are compressed on the
+> explicit `@optimize` / `/optimize` path, while **output** compression *is*
+> automatic (the Bash `PostToolUse` hook replaces tool output via
+> `updatedToolOutput`).
 
 - **Repository:** https://github.com/thavionai/optimize-pilot
 - **Marketplace:** https://marketplace.visualstudio.com/items?itemName=thavionai.optimize-pilot
@@ -27,12 +51,41 @@ It registers a chat participant, `@optimize`, in the Copilot Chat panel. You typ
 code --install-extension thavionai.optimize-pilot
 ```
 
-**From a `.vsix`** — download `optimize-pilot-<version>.vsix` from the
+**From a `.vsix`** — download `optimize-pilot-0.1.0.vsix` from the
 [releases page](https://github.com/thavionai/optimize-pilot/releases) and:
 
 ```bash
-code --install-extension optimize-pilot-<version>.vsix
+code --install-extension optimize-pilot-0.1.0.vsix
 ```
+
+### Claude Code plugin
+
+The `claude/` directory is a self-contained Claude Code plugin — it ships
+`/optimize`, `/discover`, `/optimize-stats`, the `optimize_*` MCP tools, and an
+automatic Bash-output compression hook. Install it from Claude Code's plugin
+manager (`/plugin`) pointed at this repo, or add the `claude/` folder to your
+plugins directory. No build step — the engine is committed and dependency-free.
+
+### CLI via Homebrew (macOS / Linux)
+
+The standalone `optimize-pilot` command is the same engine, usable in any pipe:
+
+```bash
+brew install thavionai/tap/optimize-pilot
+
+noisy-command 2>&1 | optimize-pilot       # compress command output
+optimize-pilot --prompt   < prompt.txt    # compress a prose prompt
+optimize-pilot --discover < prompt.txt    # dry-run savings report
+```
+
+Until a tap is published you can install straight from the latest commit:
+
+```bash
+brew install --HEAD thavionai/optimize-pilot \
+  || brew install --HEAD https://raw.githubusercontent.com/thavionai/optimize-pilot/main/Formula/optimize-pilot.rb
+```
+
+The formula lives at [`Formula/optimize-pilot.rb`](./Formula/optimize-pilot.rb).
 
 ## How it works
 
