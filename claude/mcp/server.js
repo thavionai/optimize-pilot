@@ -11,12 +11,13 @@ const {
 	optimizePrompt,
 	estimateTokens,
 	compressOutput,
+	optimizeCommandOutput,
 	discover,
 } = require('./optimizer.js');
 const stats = require('./stats.js');
 
 const DEFAULT_PROTOCOL_VERSION = '2024-11-05';
-const SERVER_INFO = { name: 'optimize-pilot', version: '0.2.0' };
+const SERVER_INFO = { name: 'optimize-pilot', version: '0.2.1' };
 
 const TOOLS = [
 	{
@@ -43,11 +44,17 @@ const TOOLS = [
 			'Compress raw command/log/tool output deterministically: strip ANSI & ' +
 			'progress noise, collapse exact-repeat lines into "… (×N)", and truncate ' +
 			'oversized output to head+tail. Never paraphrases a line. No model call. ' +
-			'Use on long command results to shrink what enters context.',
+			'Pass the originating `command` to use a command-aware profile (jest → ' +
+			'failures only, npm install → drop chatter, git status → drop hints).',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				text: { type: 'string', description: 'Raw output to compress.' },
+				command: {
+					type: 'string',
+					description:
+						'Optional: the command that produced the output, for profile selection.',
+				},
 			},
 			required: ['text'],
 		},
@@ -112,19 +119,23 @@ function runOptimize(args) {
 
 function runCompress(args) {
 	const text = typeof args.text === 'string' ? args.text : String(args.text ?? '');
-	const { compressed, linesBefore, linesAfter } = compressOutput(text);
+	const command = typeof args.command === 'string' ? args.command : '';
+	const { compressed, linesBefore, linesAfter, profile } = command
+		? optimizeCommandOutput(command, text)
+		: { ...compressOutput(text), profile: 'generic' };
 	const before = estimateTokens(text);
 	const after = estimateTokens(compressed);
 	const saved = before - after;
 	const pct = before > 0 ? Math.round((saved / before) * 100) : 0;
 	const summary =
 		`~tokens ${before} → ${after} (saved ${saved}, ${pct}%) · ` +
-		`lines ${linesBefore} → ${linesAfter}`;
+		`lines ${linesBefore} → ${linesAfter} · profile: ${profile}`;
 	stats.record('output', before, after);
 	return {
 		content: [{ type: 'text', text: `${compressed}\n\n---\n${summary}` }],
 		structuredContent: {
 			compressed,
+			profile,
 			linesBefore,
 			linesAfter,
 			estTokensBefore: before,

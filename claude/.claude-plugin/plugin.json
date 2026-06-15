@@ -1,7 +1,7 @@
 {
   "name": "optimize-pilot",
-  "description": "Deterministic two-way token optimizer — compresses your prompts AND command output. Auto-compresses Bash output via a PostToolUse hook; /optimize, /discover, /optimize-stats commands + MCP tools. Zero token cost, code-safe, meaning-preserving.",
-  "version": "0.2.0",
+  "description": "Deterministic two-way token optimizer — compresses your prompts AND command output, with command-aware profiles (jest/npm/git). Auto-compresses Bash output via a PostToolUse hook; /optimize, /discover, /optimize-stats commands + MCP tools. Zero token cost, code-safe, meaning-preserving.",
+  "version": "0.2.1",
   "author": { "name": "thavionai" },
   "homepage": "https://github.com/thavionai/optimize-pilot",
   "license": "MIT"

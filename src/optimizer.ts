@@ -655,3 +655,144 @@ export function discover(
 		groups: groups.sort((a, b) => b.saved - a.saved),
 	};
 }
+
+// ---------------------------------------------------------------------------
+// Command-aware output optimizers
+//
+// The generic compressOutput is content-blind. These profiles understand the
+// shape of specific commands and keep the signal a developer actually needs:
+// failing tests (not the passing ones), the install summary (not the install
+// chatter), the file changes (not the "(use git ...)" hints). Each profile only
+// ever DROPS noise — it never rewrites or hides an error/failure — and its
+// result is still run through generic compression for a final pass.
+// ---------------------------------------------------------------------------
+
+export type OutputProfile =
+	| 'jest'
+	| 'npm-install'
+	| 'git-status'
+	| 'git-log'
+	| 'git-diff'
+	| 'generic';
+
+export interface CommandOutputResult extends OutputCompressionResult {
+	/** Which profile handled the output. */
+	profile: OutputProfile;
+}
+
+/** Pick a profile from the command string (falling back to output sniffing). */
+export function detectProfile(command: string, output = ''): OutputProfile {
+	const c = (command || '').toLowerCase();
+	// Test runners — checked first so `npm test` beats the npm-install matcher.
+	if (
+		/\b(jest|vitest)\b/.test(c) ||
+		/\b(npm|pnpm|yarn|bun)\s+(run\s+)?test\b/.test(c) ||
+		/\b(npm|pnpm|yarn)\s+t\b/.test(c)
+	) {
+		return 'jest';
+	}
+	if (
+		/\b(npm|pnpm|bun)\s+(i|ci|install|add)\b/.test(c) ||
+		/\byarn\s+(install|add)\b/.test(c)
+	) {
+		return 'npm-install';
+	}
+	if (/\bgit\s+status\b/.test(c)) {
+		return 'git-status';
+	}
+	if (/\bgit\s+log\b/.test(c)) {
+		return 'git-log';
+	}
+	if (/\bgit\s+(diff|show)\b/.test(c)) {
+		return 'git-diff';
+	}
+	// No (or unrecognized) command: sniff jest's unmistakable summary block.
+	if (!command && /^\s*(Tests:|Test Suites:)/m.test(output)) {
+		return 'jest';
+	}
+	return 'generic';
+}
+
+// Keep failing tests + the summary; drop passing suites and passing test lines.
+// Works for both Jest (PASS/FAIL, ✓/✕, "● Suite › test") and Vitest (✓/×).
+function keepTestFailures(output: string): string {
+	return output
+		.replace(ANSI, '')
+		.split('\n')
+		.filter((line) => {
+			const t = line.trim();
+			if (/^PASS\b/.test(t)) {
+				return false; // a wholly-passing suite — drop the line
+			}
+			if (/^[✓✔√]\s/.test(t)) {
+				return false; // an individual passing test — drop it
+			}
+			return true; // FAIL lines, "●" failure blocks, errors, summary: keep
+		})
+		.join('\n');
+}
+
+// Drop npm's verbose log-level lines and collapse the deprecation spam into a
+// single count; keep the summary ("added N packages"), audit, and all errors.
+function stripNpmNoise(output: string): string {
+	const kept: string[] = [];
+	let deprecated = 0;
+	for (const line of output.replace(ANSI, '').split('\n')) {
+		const t = line.trim();
+		if (/^npm (timing|http|sill|silly|verbose|info)\b/i.test(t)) {
+			continue;
+		}
+		if (/^npm warn deprecated\b/i.test(t)) {
+			deprecated++;
+			continue;
+		}
+		kept.push(line);
+	}
+	if (deprecated) {
+		kept.push(
+			`npm warn: ${deprecated} deprecated-package warning(s) suppressed by optimize-pilot`,
+		);
+	}
+	return kept.join('\n');
+}
+
+// Drop the "(use "git ...")" hint lines git prints under each status section.
+function stripGitStatusHints(output: string): string {
+	return output
+		.replace(ANSI, '')
+		.split('\n')
+		.filter((line) => !/^\s*\(use\b/.test(line))
+		.join('\n');
+}
+
+/**
+ * Compress command output using the profile that matches `command`. Always
+ * finishes with a generic compression pass (dedupe/noise/truncate). The
+ * returned `linesBefore` reflects the original, untouched output.
+ */
+export function optimizeCommandOutput(
+	command: string,
+	output: string,
+	options: OutputCompressionOptions = DEFAULT_OUTPUT_OPTIONS,
+): CommandOutputResult {
+	const linesBefore = output.split('\n').length;
+	const profile = detectProfile(command, output);
+
+	let pre = output;
+	switch (profile) {
+		case 'jest':
+			pre = keepTestFailures(output);
+			break;
+		case 'npm-install':
+			pre = stripNpmNoise(output);
+			break;
+		case 'git-status':
+			pre = stripGitStatusHints(output);
+			break;
+		// git-log, git-diff, generic: trust the generic pass below (don't risk
+		// mangling diff hunks or log bodies with content-specific edits).
+	}
+
+	const { compressed, linesAfter } = compressOutput(pre, options);
+	return { compressed, profile, linesBefore, linesAfter };
+}

@@ -4,6 +4,8 @@ import {
 	estimateTokens,
 	DEFAULT_OPTIONS,
 	compressOutput,
+	optimizeCommandOutput,
+	detectProfile,
 	discover,
 	compileCustomRules,
 } from '../optimizer';
@@ -247,6 +249,66 @@ suite('compressOutput', () => {
 	test('strips ANSI colour codes', () => {
 		const { compressed } = compressOutput('\x1b[31mred\x1b[0m line');
 		assert.strictEqual(compressed, 'red line');
+	});
+});
+
+suite('command-aware output', () => {
+	test('detects profiles from the command', () => {
+		assert.strictEqual(detectProfile('npm test'), 'jest');
+		assert.strictEqual(detectProfile('npx jest --ci'), 'jest');
+		assert.strictEqual(detectProfile('npm install'), 'npm-install');
+		assert.strictEqual(detectProfile('yarn add lodash'), 'npm-install');
+		assert.strictEqual(detectProfile('git status'), 'git-status');
+		assert.strictEqual(detectProfile('git log --oneline'), 'git-log');
+		assert.strictEqual(detectProfile('echo hi'), 'generic');
+	});
+
+	test('jest profile keeps failures + summary, drops passing tests', () => {
+		const jest = [
+			' PASS  src/a.test.js',
+			' FAIL  src/b.test.js',
+			'  ● Component › renders',
+			'    expect(received).toBe(expected)',
+			'    at Object.<anonymous> (src/b.test.js:10:5)',
+			'  ✓ unrelated passing case (3 ms)',
+			'Tests:       1 failed, 5 passed, 6 total',
+		].join('\n');
+		const { compressed, profile } = optimizeCommandOutput('npm test', jest);
+		assert.strictEqual(profile, 'jest');
+		assert.ok(!compressed.includes('PASS  src/a.test.js'), 'dropped passing suite');
+		assert.ok(!compressed.includes('✓ unrelated'), 'dropped passing test');
+		assert.ok(compressed.includes('FAIL  src/b.test.js'), 'kept failing suite');
+		assert.ok(compressed.includes('● Component › renders'), 'kept failure block');
+		assert.ok(compressed.includes('1 failed, 5 passed'), 'kept summary');
+	});
+
+	test('npm-install collapses deprecation spam, keeps the summary', () => {
+		const npm = [
+			'npm warn deprecated foo@1.0.0: use bar',
+			'npm warn deprecated baz@2.0.0: gone',
+			'npm http fetch GET 200 https://registry...',
+			'npm timing idealTree Completed in 12ms',
+			'added 412 packages in 8s',
+		].join('\n');
+		const { compressed, profile } = optimizeCommandOutput('npm install', npm);
+		assert.strictEqual(profile, 'npm-install');
+		assert.ok(!compressed.includes('npm http'), 'dropped http chatter');
+		assert.ok(!compressed.includes('npm timing'), 'dropped timing');
+		assert.ok(compressed.includes('2 deprecated-package'), 'collapsed deprecations');
+		assert.ok(compressed.includes('added 412 packages'), 'kept summary');
+	});
+
+	test('git-status drops the "(use ...)" hint lines', () => {
+		const gs = [
+			'On branch main',
+			'Changes not staged for commit:',
+			'  (use "git add <file>..." to update what will be committed)',
+			'  (use "git restore <file>..." to discard changes)',
+			'\tmodified:   src/app.ts',
+		].join('\n');
+		const { compressed } = optimizeCommandOutput('git status', gs);
+		assert.ok(!compressed.includes('(use "git'), 'dropped hints');
+		assert.ok(compressed.includes('modified:   src/app.ts'), 'kept file change');
 	});
 });
 

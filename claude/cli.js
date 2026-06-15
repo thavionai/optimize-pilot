@@ -4,18 +4,26 @@
 // composes in pipes). RTK-style:
 //
 //   noisy-command 2>&1 | node cli.js            # compress command output
+//   npm test 2>&1 | node cli.js --cmd "npm test"  # command-aware (failures only)
 //   node cli.js --prompt < prompt.txt           # compress a prose prompt
 //   node cli.js --discover < prompt.txt         # dry-run savings report
 //
-// Default mode is output compression (dedupe/noise/truncate). `--prompt`
-// switches to the prose rules; `--discover` prints a per-group breakdown.
+// Default mode is output compression (dedupe/noise/truncate). `--cmd "<command>"`
+// selects a command-aware profile (jest/npm/git). `--prompt` switches to the
+// prose rules; `--discover` prints a per-group breakdown.
 
 const {
 	optimizePrompt,
 	compressOutput,
+	optimizeCommandOutput,
 	discover,
 	estimateTokens,
 } = require('./mcp/optimizer.js');
+
+function flagValue(name) {
+	const i = process.argv.indexOf(name);
+	return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : '';
+}
 
 const mode = process.argv.includes('--prompt')
 	? 'prompt'
@@ -41,7 +49,10 @@ process.stdin.on('end', () => {
 		process.stdout.write(r.optimized + '\n');
 		return;
 	} else {
-		out = compressOutput(input).compressed;
+		const cmd = flagValue('--cmd');
+		out = cmd
+			? optimizeCommandOutput(cmd, input).compressed
+			: compressOutput(input).compressed;
 	}
 	const after = estimateTokens(out);
 	const saved = before - after;

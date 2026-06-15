@@ -2,6 +2,15 @@
 
 All notable changes to the "prompt-optimizer" extension will be documented in this file.
 
+## [0.2.0]
+
+- **Command-aware output optimizers** — output compression now understands what produced the text and keeps the signal a developer needs. Pass the command (the Bash `PostToolUse` hook and `compress_output` MCP tool do this automatically; the CLI takes `--cmd "<command>"`):
+  - **jest / vitest** → failing tests + the summary only; passing suites and `✓` lines are dropped (≈85–90% on green-heavy runs).
+  - **npm / pnpm / yarn install** → drops `npm http`/`timing`/`info` chatter, collapses deprecation warnings to a single count, keeps the `added N packages` summary, audit, and all errors (≈90%+).
+  - **git status** → drops the `(use "git ...")` hint lines, keeps branch and file changes.
+  - **git log / git diff** → generic compression only (never edits diff hunks or log bodies).
+- Unknown commands fall back to the generic compressor (dedupe/noise/truncate). Profiles only ever drop noise — a failure or error is never hidden.
+
 ## [0.1.0]
 
 A release inspired by [RTK](https://github.com/rtk-ai/rtk): optimize-pilot now works on **both ends** of the token pipeline — your prompts *and* command/tool output — while keeping the same deterministic, no-model-call, meaning-preserving contract.

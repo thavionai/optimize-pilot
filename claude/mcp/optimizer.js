@@ -24,8 +24,10 @@ __export(optimizer_exports, {
   DEFAULT_OUTPUT_OPTIONS: () => DEFAULT_OUTPUT_OPTIONS,
   compileCustomRules: () => compileCustomRules,
   compressOutput: () => compressOutput,
+  detectProfile: () => detectProfile,
   discover: () => discover,
   estimateTokens: () => estimateTokens,
+  optimizeCommandOutput: () => optimizeCommandOutput,
   optimizePrompt: () => optimizePrompt
 });
 module.exports = __toCommonJS(optimizer_exports);
@@ -495,13 +497,91 @@ function discover(input, options = DEFAULT_OPTIONS) {
     groups: groups.sort((a, b) => b.saved - a.saved)
   };
 }
+function detectProfile(command, output = "") {
+  const c = (command || "").toLowerCase();
+  if (/\b(jest|vitest)\b/.test(c) || /\b(npm|pnpm|yarn|bun)\s+(run\s+)?test\b/.test(c) || /\b(npm|pnpm|yarn)\s+t\b/.test(c)) {
+    return "jest";
+  }
+  if (/\b(npm|pnpm|bun)\s+(i|ci|install|add)\b/.test(c) || /\byarn\s+(install|add)\b/.test(c)) {
+    return "npm-install";
+  }
+  if (/\bgit\s+status\b/.test(c)) {
+    return "git-status";
+  }
+  if (/\bgit\s+log\b/.test(c)) {
+    return "git-log";
+  }
+  if (/\bgit\s+(diff|show)\b/.test(c)) {
+    return "git-diff";
+  }
+  if (!command && /^\s*(Tests:|Test Suites:)/m.test(output)) {
+    return "jest";
+  }
+  return "generic";
+}
+function keepTestFailures(output) {
+  return output.replace(ANSI, "").split("\n").filter((line) => {
+    const t = line.trim();
+    if (/^PASS\b/.test(t)) {
+      return false;
+    }
+    if (/^[✓✔√]\s/.test(t)) {
+      return false;
+    }
+    return true;
+  }).join("\n");
+}
+function stripNpmNoise(output) {
+  const kept = [];
+  let deprecated = 0;
+  for (const line of output.replace(ANSI, "").split("\n")) {
+    const t = line.trim();
+    if (/^npm (timing|http|sill|silly|verbose|info)\b/i.test(t)) {
+      continue;
+    }
+    if (/^npm warn deprecated\b/i.test(t)) {
+      deprecated++;
+      continue;
+    }
+    kept.push(line);
+  }
+  if (deprecated) {
+    kept.push(
+      `npm warn: ${deprecated} deprecated-package warning(s) suppressed by optimize-pilot`
+    );
+  }
+  return kept.join("\n");
+}
+function stripGitStatusHints(output) {
+  return output.replace(ANSI, "").split("\n").filter((line) => !/^\s*\(use\b/.test(line)).join("\n");
+}
+function optimizeCommandOutput(command, output, options = DEFAULT_OUTPUT_OPTIONS) {
+  const linesBefore = output.split("\n").length;
+  const profile = detectProfile(command, output);
+  let pre = output;
+  switch (profile) {
+    case "jest":
+      pre = keepTestFailures(output);
+      break;
+    case "npm-install":
+      pre = stripNpmNoise(output);
+      break;
+    case "git-status":
+      pre = stripGitStatusHints(output);
+      break;
+  }
+  const { compressed, linesAfter } = compressOutput(pre, options);
+  return { compressed, profile, linesBefore, linesAfter };
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   DEFAULT_OPTIONS,
   DEFAULT_OUTPUT_OPTIONS,
   compileCustomRules,
   compressOutput,
+  detectProfile,
   discover,
   estimateTokens,
+  optimizeCommandOutput,
   optimizePrompt
 });

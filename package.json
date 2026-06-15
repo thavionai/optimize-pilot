@@ -2,7 +2,7 @@
   "name": "optimize-pilot",
   "displayName": "Optimize Pilot",
   "description": "Compress your Copilot Chat prompts and command output to save tokens — meaning-preserving, code-safe, no model call.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "thavionai",
   "license": "MIT",
   "repository": {

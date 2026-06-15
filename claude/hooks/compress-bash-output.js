@@ -10,7 +10,7 @@
 // Deterministic, no model call, meaning-preserving. Output is left untouched
 // unless compression is both safe and worthwhile.
 
-const { compressOutput, estimateTokens } = require('../mcp/optimizer.js');
+const { optimizeCommandOutput, estimateTokens } = require('../mcp/optimizer.js');
 const stats = require('../mcp/stats.js');
 
 // Don't bother with small outputs — overhead isn't worth it and tiny results
@@ -49,7 +49,11 @@ function readStdin() {
 		process.exit(0);
 	}
 
-	const { compressed } = compressOutput(resp);
+	const command =
+		input.tool_input && typeof input.tool_input.command === 'string'
+			? input.tool_input.command
+			: '';
+	const { compressed } = optimizeCommandOutput(command, resp);
 	if (compressed.length >= resp.length) {
 		process.exit(0); // nothing gained — leave it alone
 	}
