@@ -3,6 +3,7 @@
 .claude/**
 .claude-plugin/**
 claude/**
+Formula/**
 .github/**
 **/*.vsix
 out/**

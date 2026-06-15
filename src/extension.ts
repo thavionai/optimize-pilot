@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import {
 	optimizePrompt,
 	estimateTokens,
+	compressDocument,
 	OptimizerOptions,
 	CustomRule,
 } from './optimizer';
@@ -267,6 +268,57 @@ const handler: vscode.ChatRequestHandler = async (
 	}
 };
 
+// Compact the active editor's document (or selection) with the document
+// optimizer: drop duplicate blocks, then apply the prose rules. The edit is a
+// single undoable operation, and code is never touched.
+async function compactActiveDocument(): Promise<void> {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		void vscode.window.showInformationMessage(
+			'Optimize Pilot: open a document first, then run this command.',
+		);
+		return;
+	}
+
+	const sel = editor.selection;
+	const useSelection = !sel.isEmpty;
+	const range = useSelection
+		? new vscode.Range(sel.start, sel.end)
+		: new vscode.Range(
+				editor.document.positionAt(0),
+				editor.document.positionAt(editor.document.getText().length),
+			);
+
+	const original = editor.document.getText(range);
+	const { compressed, duplicatesRemoved, blocksBefore, blocksAfter } =
+		compressDocument(original);
+
+	if (compressed === original) {
+		void vscode.window.showInformationMessage(
+			'Optimize Pilot: nothing to compact — no duplicate blocks or shortenable prose found.',
+		);
+		return;
+	}
+
+	const before = estimateTokens(original);
+	const after = estimateTokens(compressed);
+	const saved = before - after;
+	const pct = before > 0 ? Math.round((saved / before) * 100) : 0;
+
+	const applied = await editor.edit((b) => b.replace(range, compressed));
+	if (!applied) {
+		void vscode.window.showWarningMessage('Optimize Pilot: could not apply the edit.');
+		return;
+	}
+	recordSavings(before, after);
+	void vscode.window.showInformationMessage(
+		`Optimize Pilot compacted ${useSelection ? 'the selection' : 'the document'}: ` +
+			`~${before} → ~${after} tokens (saved ~${saved}, ${pct}%), ` +
+			`blocks ${blocksBefore} → ${blocksAfter}, removed ${duplicatesRemoved} duplicate(s). ` +
+			'Undo with ⌘Z.',
+	);
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	memento = context.globalState;
 
@@ -278,6 +330,10 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('promptOptimizer.showStats', () => {
 			void vscode.window.showInformationMessage(lifetimeSummary());
 		}),
+		vscode.commands.registerCommand(
+			'promptOptimizer.compactDocument',
+			compactActiveDocument,
+		),
 	);
 }
 

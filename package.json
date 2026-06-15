@@ -108,8 +108,21 @@
       {
         "command": "promptOptimizer.showStats",
         "title": "Optimize Pilot: Show Lifetime Token Savings"
+      },
+      {
+        "command": "promptOptimizer.compactDocument",
+        "title": "Optimize Pilot: Compact Document (dedupe + shorten)"
       }
-    ]
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "promptOptimizer.compactDocument",
+          "when": "editorTextFocus",
+          "group": "1_modification"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
