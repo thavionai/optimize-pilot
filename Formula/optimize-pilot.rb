@@ -17,7 +17,7 @@ class OptimizePilot < Formula
   desc "Deterministic two-way token optimizer — compress prompts and command output"
   homepage "https://github.com/thavionai/optimize-pilot"
   url "https://github.com/thavionai/optimize-pilot/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "REPLACE_WITH_SHA256_OF_THE_RELEASE_TARBALL"
+  sha256 "f717620528c76b661da031766332a9a2d793190848e46f9106d13e54eda758bd"
   license "MIT"
   head "https://github.com/thavionai/optimize-pilot.git", branch: "main"
 
