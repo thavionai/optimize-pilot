@@ -12,12 +12,13 @@ const {
 	estimateTokens,
 	compressOutput,
 	optimizeCommandOutput,
+	compressDocument,
 	discover,
 } = require('./optimizer.js');
 const stats = require('./stats.js');
 
 const DEFAULT_PROTOCOL_VERSION = '2024-11-05';
-const SERVER_INFO = { name: 'optimize-pilot', version: '0.2.1' };
+const SERVER_INFO = { name: 'optimize-pilot', version: '0.2.2' };
 
 const TOOLS = [
 	{
@@ -55,6 +56,21 @@ const TOOLS = [
 					description:
 						'Optional: the command that produced the output, for profile selection.',
 				},
+			},
+			required: ['text'],
+		},
+	},
+	{
+		name: 'compress_document',
+		description:
+			'Compress a long instruction/skill document (SKILL.md, CLAUDE.md, system ' +
+			'prompts) losslessly: drop duplicate/near-duplicate paragraphs (keeping the ' +
+			'first copy), then apply the prose rules. Never touches code; short blocks ' +
+			'like headings are protected. No model call.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				text: { type: 'string', description: 'The document text to compress.' },
 			},
 			required: ['text'],
 		},
@@ -146,6 +162,36 @@ function runCompress(args) {
 	};
 }
 
+function runCompressDocument(args) {
+	const text = typeof args.text === 'string' ? args.text : String(args.text ?? '');
+	const { compressed, blocksBefore, blocksAfter, duplicatesRemoved, applied } =
+		compressDocument(text);
+	const before = estimateTokens(text);
+	const after = estimateTokens(compressed);
+	const saved = before - after;
+	const pct = before > 0 ? Math.round((saved / before) * 100) : 0;
+	const summary =
+		`~tokens ${before} → ${after} (saved ${saved}, ${pct}%) · ` +
+		`blocks ${blocksBefore} → ${blocksAfter} · ` +
+		`removed ${duplicatesRemoved} duplicate(s) · ` +
+		`applied: ${applied.length ? applied.join(', ') : 'none'}`;
+	stats.record('prompt', before, after);
+	return {
+		content: [{ type: 'text', text: `${compressed}\n\n---\n${summary}` }],
+		structuredContent: {
+			compressed,
+			blocksBefore,
+			blocksAfter,
+			duplicatesRemoved,
+			applied,
+			estTokensBefore: before,
+			estTokensAfter: after,
+			saved,
+			percent: pct,
+		},
+	};
+}
+
 function runDiscover(args) {
 	const text = typeof args.text === 'string' ? args.text : String(args.text ?? '');
 	const report = discover(text);
@@ -171,6 +217,7 @@ function runStats() {
 const HANDLERS = {
 	optimize_prompt: runOptimize,
 	compress_output: runCompress,
+	compress_document: runCompressDocument,
 	optimize_discover: runDiscover,
 	optimize_stats: runStats,
 };

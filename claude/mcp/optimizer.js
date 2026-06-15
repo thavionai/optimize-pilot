@@ -20,9 +20,11 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/optimizer.ts
 var optimizer_exports = {};
 __export(optimizer_exports, {
+  DEFAULT_DOCUMENT_OPTIONS: () => DEFAULT_DOCUMENT_OPTIONS,
   DEFAULT_OPTIONS: () => DEFAULT_OPTIONS,
   DEFAULT_OUTPUT_OPTIONS: () => DEFAULT_OUTPUT_OPTIONS,
   compileCustomRules: () => compileCustomRules,
+  compressDocument: () => compressDocument,
   compressOutput: () => compressOutput,
   detectProfile: () => detectProfile,
   discover: () => discover,
@@ -573,11 +575,64 @@ function optimizeCommandOutput(command, output, options = DEFAULT_OUTPUT_OPTIONS
   const { compressed, linesAfter } = compressOutput(pre, options);
   return { compressed, profile, linesBefore, linesAfter };
 }
+var DEFAULT_DOCUMENT_OPTIONS = {
+  dedupeBlocks: true,
+  minDuplicateChars: 40,
+  applyProseRules: true
+};
+function normalizeBlockKey(block) {
+  return block.toLowerCase().replace(/[*_`#>~]/g, "").replace(/^\s*[-+]\s+/gm, "").replace(/\s+/g, " ").trim();
+}
+function compressDocument(input, options = DEFAULT_DOCUMENT_OPTIONS) {
+  const applied = [];
+  const { masked, segments } = maskCode(input);
+  const prepared = masked.replace(/\n(#{1,6} )/g, "\n\n$1").replace(/(^|\n)(#{1,6} [^\n]*)\n(?=\S)/g, "$1$2\n\n");
+  const blocks = prepared.split(/\n{2,}/);
+  const blocksBefore = blocks.length;
+  let kept = blocks;
+  let duplicatesRemoved = 0;
+  if (options.dedupeBlocks) {
+    const seen = /* @__PURE__ */ new Set();
+    kept = [];
+    for (const block of blocks) {
+      const key = normalizeBlockKey(block);
+      const dedupable = key.length >= options.minDuplicateChars;
+      if (dedupable && seen.has(key)) {
+        duplicatesRemoved++;
+        continue;
+      }
+      if (dedupable) {
+        seen.add(key);
+      }
+      kept.push(block);
+    }
+    if (duplicatesRemoved > 0) {
+      applied.push(`deduped ${duplicatesRemoved} block(s)`);
+    }
+  }
+  let out = restoreCode(kept.join("\n\n"), segments);
+  if (options.applyProseRules) {
+    const r = optimizePrompt(out);
+    out = r.optimized;
+    applied.push(...r.applied);
+  } else {
+    out = out.trim();
+  }
+  return {
+    compressed: out,
+    blocksBefore,
+    blocksAfter: kept.length,
+    duplicatesRemoved,
+    applied
+  };
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  DEFAULT_DOCUMENT_OPTIONS,
   DEFAULT_OPTIONS,
   DEFAULT_OUTPUT_OPTIONS,
   compileCustomRules,
+  compressDocument,
   compressOutput,
   detectProfile,
   discover,

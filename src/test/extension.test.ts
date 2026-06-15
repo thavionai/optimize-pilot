@@ -6,6 +6,7 @@ import {
 	compressOutput,
 	optimizeCommandOutput,
 	detectProfile,
+	compressDocument,
 	discover,
 	compileCustomRules,
 } from '../optimizer';
@@ -309,6 +310,55 @@ suite('command-aware output', () => {
 		const { compressed } = optimizeCommandOutput('git status', gs);
 		assert.ok(!compressed.includes('(use "git'), 'dropped hints');
 		assert.ok(compressed.includes('modified:   src/app.ts'), 'kept file change');
+	});
+});
+
+suite('compressDocument', () => {
+	test('drops a verbatim duplicate paragraph, keeps the first', () => {
+		const para =
+			'Always validate the order before placing it with the broker API endpoint.';
+		const doc = `# Rules\n\n${para}\n\n## More\n\n${para}`;
+		const r = compressDocument(doc, {
+			dedupeBlocks: true,
+			minDuplicateChars: 40,
+			applyProseRules: false,
+		});
+		assert.strictEqual(r.duplicatesRemoved, 1);
+		assert.strictEqual(r.compressed.split(para).length - 1, 1);
+	});
+
+	test('collapses near-duplicate blocks (whitespace/markdown differences)', () => {
+		const doc =
+			'- The cache must be invalidated whenever a record changes in the database.\n\n' +
+			'The cache must be invalidated whenever a record changes in the database.';
+		const r = compressDocument(doc, {
+			dedupeBlocks: true,
+			minDuplicateChars: 40,
+			applyProseRules: false,
+		});
+		assert.strictEqual(r.duplicatesRemoved, 1);
+	});
+
+	test('protects short repeated blocks like headings', () => {
+		const doc = '## Examples\n\nfirst body here\n\n## Examples\n\nsecond body here';
+		const r = compressDocument(doc, {
+			dedupeBlocks: true,
+			minDuplicateChars: 40,
+			applyProseRules: false,
+		});
+		assert.strictEqual(r.duplicatesRemoved, 0);
+		assert.ok(r.compressed.includes('second body here'));
+	});
+
+	test('never dedupes code blocks', () => {
+		const code = '```js\nconst x = 1;\n```';
+		const doc = `${code}\n\n${code}`;
+		const r = compressDocument(doc, {
+			dedupeBlocks: true,
+			minDuplicateChars: 10,
+			applyProseRules: false,
+		});
+		assert.strictEqual(r.compressed.split('const x = 1;').length - 1, 2);
 	});
 });
 

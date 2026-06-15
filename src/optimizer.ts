@@ -796,3 +796,112 @@ export function optimizeCommandOutput(
 	const { compressed, linesAfter } = compressOutput(pre, options);
 	return { compressed, profile, linesBefore, linesAfter };
 }
+
+// ---------------------------------------------------------------------------
+// Document / skill compression
+//
+// Long instruction documents (SKILL.md, CLAUDE.md, system prompts) are loaded
+// into context every session, and they accumulate repetition — the same rule,
+// note, or boilerplate paragraph restated in several places. Inspired by the
+// deterministic half of "SkillReducer" (arXiv 2603.29919), this removes
+// duplicate blocks losslessly: it keeps the FIRST occurrence of each
+// paragraph/block and drops verbatim or near-verbatim repeats, then optionally
+// runs the prose rules. It never touches code, and a size gate protects short
+// blocks (headings, labels) from being deduped away.
+// ---------------------------------------------------------------------------
+
+export interface DocumentCompressionOptions {
+	/** Drop later occurrences of duplicate paragraphs/blocks. */
+	dedupeBlocks: boolean;
+	/** Only dedupe blocks whose normalized key is at least this long (protects
+	 * short headings/labels that may legitimately repeat). */
+	minDuplicateChars: number;
+	/** Also run the prose optimizer (verbose phrases, filler, contractions). */
+	applyProseRules: boolean;
+}
+
+export const DEFAULT_DOCUMENT_OPTIONS: DocumentCompressionOptions = {
+	dedupeBlocks: true,
+	minDuplicateChars: 40,
+	applyProseRules: true,
+};
+
+export interface DocumentCompressionResult {
+	compressed: string;
+	blocksBefore: number;
+	blocksAfter: number;
+	duplicatesRemoved: number;
+	applied: string[];
+}
+
+// A whitespace/markdown-insensitive key so "near-verbatim" repeats (differing
+// only in spacing, casing, or list/heading markers) collapse together.
+function normalizeBlockKey(block: string): string {
+	return block
+		.toLowerCase()
+		.replace(/[*_`#>~]/g, '')
+		.replace(/^\s*[-+]\s+/gm, '')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/**
+ * Compress a document by removing duplicate blocks (and optionally applying the
+ * prose rules). Code is never touched; the first copy of any repeated block is
+ * always kept.
+ */
+export function compressDocument(
+	input: string,
+	options: DocumentCompressionOptions = DEFAULT_DOCUMENT_OPTIONS,
+): DocumentCompressionResult {
+	const applied: string[] = [];
+	const { masked, segments } = maskCode(input);
+	// Isolate ATX headings as their own blocks (blank line before AND after), so
+	// a paragraph repeated under different headings ("## Rules\n<para>" …
+	// "## Safety\n<para>") still dedupes — the heading is its own (short,
+	// protected) block and the body collapses to one copy.
+	const prepared = masked
+		.replace(/\n(#{1,6} )/g, '\n\n$1') // blank line before each heading
+		.replace(/(^|\n)(#{1,6} [^\n]*)\n(?=\S)/g, '$1$2\n\n'); // and after it
+	const blocks = prepared.split(/\n{2,}/);
+	const blocksBefore = blocks.length;
+
+	let kept = blocks;
+	let duplicatesRemoved = 0;
+	if (options.dedupeBlocks) {
+		const seen = new Set<string>();
+		kept = [];
+		for (const block of blocks) {
+			const key = normalizeBlockKey(block);
+			const dedupable = key.length >= options.minDuplicateChars;
+			if (dedupable && seen.has(key)) {
+				duplicatesRemoved++;
+				continue;
+			}
+			if (dedupable) {
+				seen.add(key);
+			}
+			kept.push(block);
+		}
+		if (duplicatesRemoved > 0) {
+			applied.push(`deduped ${duplicatesRemoved} block(s)`);
+		}
+	}
+
+	let out = restoreCode(kept.join('\n\n'), segments);
+	if (options.applyProseRules) {
+		const r = optimizePrompt(out);
+		out = r.optimized;
+		applied.push(...r.applied);
+	} else {
+		out = out.trim();
+	}
+
+	return {
+		compressed: out,
+		blocksBefore,
+		blocksAfter: kept.length,
+		duplicatesRemoved,
+		applied,
+	};
+}

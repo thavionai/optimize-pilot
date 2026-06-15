@@ -6,16 +6,19 @@
 //   noisy-command 2>&1 | node cli.js            # compress command output
 //   npm test 2>&1 | node cli.js --cmd "npm test"  # command-aware (failures only)
 //   node cli.js --prompt < prompt.txt           # compress a prose prompt
+//   node cli.js --doc    < SKILL.md             # dedupe + compress a document
 //   node cli.js --discover < prompt.txt         # dry-run savings report
 //
 // Default mode is output compression (dedupe/noise/truncate). `--cmd "<command>"`
 // selects a command-aware profile (jest/npm/git). `--prompt` switches to the
-// prose rules; `--discover` prints a per-group breakdown.
+// prose rules; `--doc` dedupes duplicate blocks in a document; `--discover`
+// prints a per-group breakdown.
 
 const {
 	optimizePrompt,
 	compressOutput,
 	optimizeCommandOutput,
+	compressDocument,
 	discover,
 	estimateTokens,
 } = require('./mcp/optimizer.js');
@@ -27,9 +30,11 @@ function flagValue(name) {
 
 const mode = process.argv.includes('--prompt')
 	? 'prompt'
-	: process.argv.includes('--discover')
-		? 'discover'
-		: 'output';
+	: process.argv.includes('--doc')
+		? 'doc'
+		: process.argv.includes('--discover')
+			? 'discover'
+			: 'output';
 
 let input = '';
 process.stdin.setEncoding('utf8');
@@ -39,6 +44,8 @@ process.stdin.on('end', () => {
 	let out;
 	if (mode === 'prompt') {
 		out = optimizePrompt(input).optimized;
+	} else if (mode === 'doc') {
+		out = compressDocument(input).compressed;
 	} else if (mode === 'discover') {
 		const r = discover(input);
 		process.stderr.write(
